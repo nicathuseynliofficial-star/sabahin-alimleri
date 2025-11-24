@@ -30,13 +30,7 @@ type ClickCoordinates = {
 
 const SINGLE_MAP_ID = 'main';
 
-export default function MapPlaceholder({
-  isEncrypting,
-  setIsEncrypting,
-}: {
-  isEncrypting: boolean;
-  setIsEncrypting: (isEncrypting: boolean) => void;
-}) {
+export default function MapPlaceholder() {
   const { user } = useAuth();
   const { firestore } = useFirebase();
   const { toast } = useToast();
@@ -45,6 +39,7 @@ export default function MapPlaceholder({
   const [mapUrl, setMapUrl] = useState(PlaceHolderImages.find(img => img.id === 'azerbaijan-map')?.imageUrl ?? PlaceHolderImages[0].imageUrl);
   const [tempMapUrl, setTempMapUrl] = useState('');
   const [isMapImportOpen, setIsMapImportOpen] = useState(false);
+  const [isEncrypting, setIsEncrypting] = useState(false);
 
   // State for the new/edit target dialog
   const [isTargetDialogOpen, setIsTargetDialogOpen] = useState(false);
@@ -115,7 +110,6 @@ export default function MapPlaceholder({
   const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isCommander) return;
     
-    // Prevent dialog from opening if we clicked on an interactive element (like a target)
     if ((e.target as HTMLElement).closest('[data-interactive]')) {
       return;
     }
@@ -150,7 +144,7 @@ export default function MapPlaceholder({
         assignedUnitId: assignedUnitId,
         status: targetStatus,
       };
-       setDocumentNonBlocking(targetDocRef, updatedData, { merge: true });
+      setDocumentNonBlocking(targetDocRef, updatedData, { merge: true });
 
 
       toast({
@@ -190,7 +184,7 @@ export default function MapPlaceholder({
   
   const generateReasoningText = (originalLat: number, originalLng: number, decoyLat: number, decoyLng: number) => {
     const interpolate = (start: number, end: number, factor: number) => start + (end - start) * factor;
-
+  
     const lat1 = interpolate(originalLat, decoyLat, 0.2).toFixed(4);
     const lng1 = interpolate(originalLng, decoyLng, 0.2).toFixed(4);
     const lat2 = interpolate(originalLat, decoyLat, 0.4).toFixed(4);
@@ -199,8 +193,30 @@ export default function MapPlaceholder({
     const lng3 = interpolate(originalLng, decoyLng, 0.6).toFixed(4);
     const lat4 = interpolate(originalLat, decoyLat, 0.8).toFixed(4);
     const lng4 = interpolate(originalLng, decoyLng, 0.8).toFixed(4);
+  
+    return `[SİSTEM] Əməliyyat gözlənilir...
 
-    return `[SİSTEM] Proses tamamlandı. Yem yayıma hazırdır.`;
+1. Collatz Qarışdırması
+→ İlkin koordinat: ${originalLat.toFixed(4)}, ${originalLng.toFixed(4)}
+→ Nəticə: ${lat1}, ${lng1}
+
+2. Prime-Jump Şifrələməsi
+→ Sadə ədəd cədvəli tətbiq edilir...
+→ Nəticə: ${lat2}, ${lng2}
+
+3. Fibonaççi Spiralı
+→ Spiral ofset tətbiq edilir...
+→ Nəticə: ${lat3}, ${lng3}
+
+4. Lehmer RNG Sürüşdürməsi
+→ Təsadüfi, lakin təkrarlanabilən sürüşdürmə...
+→ Nəticə: ${lat4}, ${lng4}
+
+5. Kvant Geo-Sürüşdürmə
+→ Yekun təhlükəsizlik layı tətbiq edildi.
+→ Yem koordinatı: ${decoyLat.toFixed(4)}, ${decoyLng.toFixed(4)}
+
+[SİSTEM] Proses tamamlandı. Yem yayıma hazırdır.`;
   };
 
 
@@ -224,7 +240,6 @@ export default function MapPlaceholder({
     });
 
     try {
-        // Clear all previous decoys first
         const oldDecoysQuery = collection(firestore, 'decoys');
         const oldDecoysSnapshot = await getDocs(oldDecoysQuery);
         const deleteBatch = writeBatch(firestore);
@@ -243,7 +258,7 @@ export default function MapPlaceholder({
             const decoyResult = await generateStrategicDecoys(decoyInput);
             
             const publicNames = ["Alfa", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"];
-            const reasoningText = `[SİSTEM] Proses tamamlandı. Yem yayıma hazırdır.`;
+            const reasoningText = generateReasoningText(target.latitude, target.longitude, decoyResult.decoyLatitude, decoyResult.decoyLongitude);
 
             const newDecoy: Decoy = {
                 id: uuidv4(),
@@ -296,11 +311,8 @@ export default function MapPlaceholder({
     try {
         const batch = writeBatch(firestore);
         
-        // Delete the target
         const targetDocRef = doc(firestore, 'operation_targets', targetToDelete.id);
         batch.delete(targetDocRef);
-        
-        // No need to delete associated decoys as they are cleared at the start of each operation
         
         await batch.commit();
 
@@ -326,7 +338,7 @@ export default function MapPlaceholder({
     const batch = writeBatch(firestore);
     
     try {
-        const collectionsToClear = ['military_units', 'operation_targets', 'decoys'];
+        const collectionsToClear = ['operation_targets', 'decoys'];
         
         for (const collectionName of collectionsToClear) {
             const collectionRef = collection(firestore, collectionName);
@@ -340,7 +352,7 @@ export default function MapPlaceholder({
 
         toast({
             title: "Xəritə Təmizləndi",
-            description: "Bütün bölüklər, hədəflər və yemlər xəritədən silindi."
+            description: "Bütün hədəflər və yemlər xəritədən silindi."
         });
 
     } catch (error) {
@@ -449,7 +461,7 @@ export default function MapPlaceholder({
                         {isCommander && (
                           <div className='mt-2 pt-2 border-t border-border'>
                               <p className='font-semibold text-sm mb-1'>Şifrələnmə Jurnalı:</p>
-                              <div className='text-muted-foreground'>[SİSTEM] Proses tamamlandı. Yem yayıma hazırdır.</div>
+                              <div className='text-muted-foreground'>{decoy.reasoning}</div>
                           </div>
                         )}
                     </TooltipContent>
@@ -575,7 +587,7 @@ export default function MapPlaceholder({
           <AlertDialogHeader>
             <AlertDialogTitle>Bütün Nöqtələri Təmizlə</AlertDialogTitle>
             <AlertDialogDescription>
-              Bu əməliyyat xəritədəki bütün bölükləri, hədəfləri və yemləri birdəfəlik siləcək. Davam etmək istədiyinizdən əminsiniz? Bu əməliyyat geri qaytarıla bilməz.
+              Bu əməliyyat xəritədəki bütün hədəfləri və yemləri birdəfəlik siləcək. Bölüklər qalacaq. Davam etmək istədiyinizdən əminsiniz?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

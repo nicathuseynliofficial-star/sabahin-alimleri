@@ -145,7 +145,7 @@ export default function UnitsDashboard() {
           <CardHeader className='flex-row items-center justify-between'>
             <div>
                 <CardTitle>Bölüklər</CardTitle>
-                <CardDescription>{units?.length ?? 0} aktiv bölük</CardDescription>
+                <CardDescription>{units?.length ?? 0} bölük mövcuddur</CardDescription>
             </div>
             <Button size="sm" onClick={() => setIsNewUnitDialogOpen(true)}>
                 <PlusCircle className='mr-2 h-4 w-4' />
