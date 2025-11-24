@@ -227,8 +227,6 @@ export default function MapPlaceholder() {
                 latitude: decoyResult.decoyLatitude,
                 longitude: decoyResult.decoyLongitude,
                 reasoning: decoyResult.reasoning,
-                originalTargetId: target.id,
-                timestamp: new Date()
             };
             
             const decoyDocRef = doc(firestore, 'decoys', newDecoy.id);
