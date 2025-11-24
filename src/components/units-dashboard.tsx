@@ -18,7 +18,7 @@ import {
 } from './ui/dropdown-menu';
 import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, query, getDocs, where, writeBatch } from 'firebase/firestore';
-import { updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -209,7 +209,11 @@ export default function UnitsDashboard() {
                 </div>
                 <div className='space-y-2'>
                     <h3 className='font-semibold'>Koordinatlar</h3>
-                    <p className='font-mono'>{selectedUnit.latitude.toFixed(4)}, {selectedUnit.longitude.toFixed(4)}</p>
+                    {selectedUnit.latitude !== undefined && selectedUnit.longitude !== undefined ? (
+                        <p className='font-mono'>{selectedUnit.latitude.toFixed(4)}, {selectedUnit.longitude.toFixed(4)}</p>
+                    ) : (
+                        <p className='text-muted-foreground'>Koordinatlar təyin edilməyib.</p>
+                    )}
                 </div>
                 <div className='space-y-2'>
                     <h3 className='font-semibold'>Komandir</h3>

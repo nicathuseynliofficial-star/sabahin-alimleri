@@ -14,7 +14,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useFirebase } from '@/firebase/provider';
-import { collection, doc, setDoc } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
 import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { v4 as uuidv4 } from 'uuid';
 import type { MilitaryUnit, UserProfile } from '@/lib/types';
