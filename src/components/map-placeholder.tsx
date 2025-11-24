@@ -111,6 +111,11 @@ export default function MapPlaceholder() {
   const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isCommander) return;
     
+    // Prevent dialog from opening if we clicked on an interactive element (like a target)
+    if ((e.target as HTMLElement).closest('[data-interactive]')) {
+      return;
+    }
+    
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
@@ -159,7 +164,8 @@ export default function MapPlaceholder() {
       const targetWithId = { ...newTarget, id: uuidv4() };
 
       const targetsCollection = collection(firestore, 'operation_targets');
-      addDocumentNonBlocking(targetsCollection, targetWithId);
+      const targetDocRef = doc(targetsCollection, targetWithId.id);
+      setDocumentNonBlocking(targetDocRef, targetWithId);
 
       toast({
           title: "Hədəf Yaradıldı",
@@ -268,9 +274,11 @@ export default function MapPlaceholder() {
         // Also delete any associated decoys
         const decoysToDeleteQuery = query(collection(firestore, 'decoys'), where('originalTargetId', '==', target.id));
         const decoysSnapshot = await getDocs(decoysToDeleteQuery);
+        const deleteBatch = writeBatch(firestore);
         decoysSnapshot.forEach(decoyDoc => {
-            deleteDocumentNonBlocking(decoyDoc.ref);
+            deleteBatch.delete(decoyDoc.ref);
         });
+        await deleteBatch.commit();
 
         toast({
             title: "Hədəf Silindi",
@@ -337,7 +345,7 @@ export default function MapPlaceholder() {
               {units?.map((unit) => (
                 <Tooltip key={unit.id}>
                   <TooltipTrigger asChild>
-                    <div className="absolute" style={{ top: `${unit.latitude}%`, left: `${unit.longitude}%` }}>
+                    <div className="absolute" style={{ top: `${unit.latitude}%`, left: `${unit.longitude}%` }} data-interactive>
                       <Shield className="w-8 h-8 text-white fill-blue-500/50 stroke-2" />
                     </div>
                   </TooltipTrigger>
@@ -351,7 +359,7 @@ export default function MapPlaceholder() {
               {targets?.map((target) => (
                  <Tooltip key={target.id}>
                     <TooltipTrigger asChild>
-                        <div className="absolute" style={{ top: `${target.latitude}%`, left: `${target.longitude}%` }}>
+                        <div className="absolute" style={{ top: `${target.latitude}%`, left: `${target.longitude}%` }} data-interactive>
                             <Target className={`w-8 h-8 ${getTargetClasses(target)}`} />
                         </div>
                     </TooltipTrigger>
@@ -378,7 +386,7 @@ export default function MapPlaceholder() {
               {decoys?.map((decoy) => (
                  <Tooltip key={decoy.id}>
                     <TooltipTrigger asChild>
-                      <div className="absolute" style={{ top: `${decoy.latitude}%`, left: `${decoy.longitude}%`, transform: 'translate(-50%, -50%)' }}>
+                      <div className="absolute" style={{ top: `${decoy.latitude}%`, left: `${decoy.longitude}%`, transform: 'translate(-50%, -50%)' }} data-interactive>
                         <div className="relative w-6 h-6">
                             <div className="absolute inset-0 bg-red-600 rounded-full pulse-anim"></div>
                             <div className="absolute inset-1 bg-red-400 rounded-full"></div>
@@ -490,5 +498,3 @@ export default function MapPlaceholder() {
     </div>
   );
 }
-
-    
