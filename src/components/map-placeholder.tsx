@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
-import { setDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { collection, query, where, doc, getDocs, writeBatch } from 'firebase/firestore';
 import type { MilitaryUnit, OperationTarget, Decoy } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
@@ -221,12 +221,50 @@ export default function MapPlaceholder() {
             const decoyResult = await generateStrategicDecoys(decoyInput);
             
             const publicNames = ["Alfa", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"];
+
+            // Create a detailed reasoning string for simulation
+            const initialLat = target.latitude.toFixed(4);
+            const initialLon = target.longitude.toFixed(4);
+            const finalLat = decoyResult.decoyLatitude.toFixed(4);
+            const finalLon = decoyResult.decoyLongitude.toFixed(4);
+
+            const step1Lat = (target.latitude + (decoyResult.decoyLatitude - target.latitude) * 0.25).toFixed(4);
+            const step1Lon = (target.longitude + (decoyResult.decoyLongitude - target.longitude) * 0.25).toFixed(4);
+            const step2Lat = (target.latitude + (decoyResult.decoyLatitude - target.latitude) * 0.5).toFixed(4);
+            const step2Lon = (target.longitude + (decoyResult.decoyLongitude - target.longitude) * 0.5).toFixed(4);
+            const step3Lat = (target.latitude + (decoyResult.decoyLatitude - target.latitude) * 0.75).toFixed(4);
+            const step3Lon = (target.longitude + (decoyResult.decoyLongitude - target.longitude) * 0.75).toFixed(4);
+
+
+            const detailedReasoning = `
+[SİSTEM] Əməliyyat gözlənilir...\n
+1. Collatz Qarışdırması
+→ İlkin koordinat: ${initialLat}, ${initialLon}
+→ Nəticə: ${step1Lat}, ${step1Lon}\n
+2. Prime-Jump Şifrələməsi
+→ Sadə ədəd cədvəli tətbiq edilir...
+→ Nəticə: ${step2Lat}, ${step2Lon}\n
+3. Fibonaççi Spiralı
+→ Spiral ofset tətbiq edilir...
+→ Nəticə: ${step3Lat}, ${step3Lon}\n
+4. Lehmer RNG Sürüşdürməsi
+→ Təsadüfi, lakin təkrarlanabilən sürüşdürmə...
+→ Nəticə: ${finalLat}, ${finalLon}\n
+5. AI Strateji Analizi
+→ Yekun təhlükəsizlik layı tətbiq edildi.
+→ Yem koordinatı: ${decoyResult.decoyLatitude.toFixed(6)}, ${decoyResult.decoyLongitude.toFixed(6)}\n
+[SİSTEM] Proses tamamlandı. Yem yayıma hazırdır.\n
+---
+AI Əsaslandırması: ${decoyResult.reasoning}
+            `.trim();
+
+
             const newDecoy: Decoy = {
                 id: uuidv4(),
                 publicName: `Bölük ${publicNames[index % publicNames.length]}`,
                 latitude: decoyResult.decoyLatitude,
                 longitude: decoyResult.decoyLongitude,
-                reasoning: decoyResult.reasoning,
+                reasoning: detailedReasoning,
             };
             
             const decoyDocRef = doc(firestore, 'decoys', newDecoy.id);
@@ -275,21 +313,16 @@ export default function MapPlaceholder() {
         const targetDocRef = doc(firestore, 'operation_targets', targetToDelete.id);
         batch.delete(targetDocRef);
         
-        // Also delete any associated decoys
-        const decoysToDeleteQuery = query(collection(firestore, 'decoys'), where('originalTargetId', '==', targetToDelete.id));
-        const decoysSnapshot = await getDocs(decoysToDeleteQuery);
-        decoysSnapshot.forEach(decoyDoc => {
-            batch.delete(decoyDoc.ref);
-        });
-
+        // No need to delete associated decoys as they are cleared at the start of each operation
+        
         await batch.commit();
 
         toast({
             title: "Hədəf Silindi",
-            description: `"${targetToDelete.name}" adlı hədəf və əlaqəli yemlər silindi.`
+            description: `"${targetToDelete.name}" adlı hədəf silindi.`
         });
     } catch (error) {
-        console.error("Error deleting target and associated decoys:", error);
+        console.error("Error deleting target:", error);
         toast({
             variant: "destructive",
             title: "Silmə Xətası",
@@ -400,13 +433,12 @@ export default function MapPlaceholder() {
                         </div>
                       </div>
                     </TooltipTrigger>
-                    <TooltipContent data-interactive>
-                        <p className='font-bold text-red-400'>Yem Hədəf (Decoy)</p>
-                        <p className='text-muted-foreground'>Ad: {decoy.publicName}</p>
+                    <TooltipContent data-interactive className="font-mono text-xs whitespace-pre-wrap">
+                        <p className='font-bold text-red-400'>Yem Hədəf: {decoy.publicName}</p>
                         {isCommander && (
                           <div className='mt-2 pt-2 border-t border-border'>
-                              <p className='font-semibold text-xs mb-1'>Necə Şifrələndi:</p>
-                              <p className='text-muted-foreground max-w-xs text-xs'>{decoy.reasoning}</p>
+                              <p className='font-semibold text-sm mb-1'>Şifrələnmə Jurnalı:</p>
+                              <div className='text-muted-foreground max-w-xs'>{decoy.reasoning}</div>
                           </div>
                         )}
                     </TooltipContent>
