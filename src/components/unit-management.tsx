@@ -14,17 +14,19 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useFirebase } from '@/firebase/provider';
-import { collection } from 'firebase/firestore';
-import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
-import { v4 as uuidv4 } from 'uuid'; // We need a UUID library
+import { collection, doc, setDoc } from 'firebase/firestore';
+import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { v4 as uuidv4 } from 'uuid';
+import type { MilitaryUnit, UserProfile } from '@/lib/types';
 
 interface UnitManagementProps {
     isOpen: boolean;
     onOpenChange: (isOpen: boolean) => void;
-    activeMapId: string;
 }
 
-export default function UnitManagement({ isOpen, onOpenChange, activeMapId }: UnitManagementProps) {
+const SINGLE_MAP_ID = 'main';
+
+export default function UnitManagement({ isOpen, onOpenChange }: UnitManagementProps) {
   const { firestore } = useFirebase();
   const [unitName, setUnitName] = useState('');
   const [commanderUsername, setCommanderUsername] = useState('');
@@ -58,33 +60,29 @@ export default function UnitManagement({ isOpen, onOpenChange, activeMapId }: Un
 
     try {
       // 1. Create the sub-commander user
-      const usersCollection = collection(firestore, 'users');
-      const newUser = {
+      const userDocRef = doc(firestore, 'users', newUserId);
+      const newUser: UserProfile = {
         id: newUserId,
         username: commanderUsername,
-        password: commanderPassword, // Note: Storing plain text passwords is insecure
+        password: commanderPassword,
         role: 'sub-commander',
         canSeeAllUnits: false,
         assignedUnitId: newUnitId,
       };
-      // Use non-blocking add to create the user
-      addDocumentNonBlocking(usersCollection, newUser);
+      setDocumentNonBlocking(userDocRef, newUser);
 
       // 2. Create the military unit and link it to the user
-      const unitsCollection = collection(firestore, 'military_units');
-      const newUnit = {
-        id: newUnitId,
+      const unitDocRef = doc(firestore, 'military_units', newUnitId);
+      const newUnit: Omit<MilitaryUnit, 'id'> = {
         name: unitName,
         status: 'offline', // Default status
         commanderId: newUserId,
-        location: { // Dummy location, can be updated later
-            lat: 40.4093 + (Math.random() - 0.5) * 2,
-            lng: 49.8671 + (Math.random() - 0.5) * 2,
-        },
-        mapId: activeMapId, // Associate with the active map
+        latitude: 40.4093 + (Math.random() - 0.5) * 0.5, // Random initial position around Baku
+        longitude: 49.8671 + (Math.random() - 0.5) * 0.5,
+        mapId: SINGLE_MAP_ID, // Associate with the single main map
       };
-      // Use non-blocking add to create the unit
-      await addDocumentNonBlocking(unitsCollection, newUnit);
+      const unitWithId = { ...newUnit, id: newUnitId };
+      setDocumentNonBlocking(unitDocRef, unitWithId);
 
       toast({
           title: "Uğurlu Əməliyyat",

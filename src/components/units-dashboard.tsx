@@ -18,7 +18,7 @@ import {
 } from './ui/dropdown-menu';
 import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, query, getDocs, where, writeBatch } from 'firebase/firestore';
-import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -106,7 +106,6 @@ export default function UnitsDashboard() {
       const userDocRef = doc(firestore, 'users', unit.commanderId);
       updateDocumentNonBlocking(userDocRef, { canSeeAllUnits });
 
-      // No need to manually update state, useCollection will do it
       toast({
           title: "İcazə Dəyişdirildi",
           description: `Komandirin xəritə görmə icazəsi yeniləndi.`
@@ -138,10 +137,6 @@ export default function UnitsDashboard() {
     if (!users || !commanderId) return 'Təyin edilməyib';
     return users.find(u => u.id === commanderId)?.username || 'Naməlum';
   }
-
-  // A default mapId is needed when opening the dialog from here.
-  // We'll default to 'azerbaijan' but a more robust solution might involve passing the active map from a higher-level component.
-  const activeMapId = "azerbaijan";
 
   return (
     <div className="h-screen w-full grid grid-cols-1 lg:grid-cols-3 gap-4 p-4">
@@ -246,7 +241,7 @@ export default function UnitsDashboard() {
             </div>
         )}
       </div>
-      <UnitManagement isOpen={isNewUnitDialogOpen} onOpenChange={setIsNewUnitDialogOpen} activeMapId={activeMapId} />
+      <UnitManagement isOpen={isNewUnitDialogOpen} onOpenChange={setIsNewUnitDialogOpen} />
 
       <AlertDialog open={!!unitToDelete} onOpenChange={(open) => !open && setUnitToDelete(null)}>
         <AlertDialogContent>

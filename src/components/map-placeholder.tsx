@@ -9,7 +9,6 @@ import { Label } from './ui/label';
 import { Switch } from './ui/switch';
 import { Map, Shield, Target, Upload, Dot } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth-provider';
-import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
 import { Input } from './ui/input';
@@ -23,24 +22,22 @@ import { useToast } from '@/hooks/use-toast';
 import { generateStrategicDecoys, type GenerateStrategicDecoysInput } from '@/ai/flows/generate-strategic-decoys';
 
 
-type MapMode = 'azerbaijan' | 'karabakh' | 'custom';
-
 type ClickCoordinates = {
     x: number;
     y: number;
 } | null;
 
+const SINGLE_MAP_ID = 'main';
 
 export default function MapPlaceholder() {
-  const [mapMode, setMapMode] = useState<MapMode>('azerbaijan');
   const [secureMode, setSecureMode] = useState(true);
   const { user } = useAuth();
   const { firestore } = useFirebase();
   const { toast } = useToast();
   const isCommander = user?.role === 'commander';
   
-  const [customMapUrl, setCustomMapUrl] = useState('');
-  const [tempCustomMapUrl, setTempCustomMapUrl] = useState('');
+  const [mapUrl, setMapUrl] = useState(PlaceHolderImages.find(img => img.id === 'azerbaijan-map')?.imageUrl ?? PlaceHolderImages[0].imageUrl);
+  const [tempMapUrl, setTempMapUrl] = useState('');
   const [isMapImportOpen, setIsMapImportOpen] = useState(false);
 
   // State for the new target dialog
@@ -67,21 +64,16 @@ export default function MapPlaceholder() {
     if (!firestore || !user) return null;
     const q = collection(firestore, 'military_units');
 
-    // For sub-commanders without full visibility, only query for their own unit.
     if (user.role === 'sub-commander' && !user.canSeeAllUnits && user.assignedUnitId) {
         return query(q, where('id', '==', user.assignedUnitId));
     }
-    // For commanders or sub-commanders with full visibility, we start with the full collection.
-    // The filtering by mapId will happen in the derived query.
     return q;
   }, [firestore, user]);
 
-  // Derived query for units, filtered by the current mapMode
   const unitsQuery = useMemoFirebase(() => {
       if (!unitsBaseQuery) return null;
-      // This query will only fetch units that match the current mapId
-      return query(unitsBaseQuery, where('mapId', '==', mapMode));
-  }, [unitsBaseQuery, mapMode]);
+      return query(unitsBaseQuery, where('mapId', '==', SINGLE_MAP_ID));
+  }, [unitsBaseQuery]);
 
   const { data: units, isLoading: isLoadingUnits } = useCollection<MilitaryUnit>(unitsQuery);
 
@@ -90,67 +82,33 @@ export default function MapPlaceholder() {
       if (!firestore || !user) return null;
       const q = collection(firestore, 'operation_targets');
 
-      // If sub-commander without full visibility, only query targets assigned to their unit.
       if (user.role === 'sub-commander' && !user.canSeeAllUnits && user.assignedUnitId) {
           return query(q, where('assignedUnitId', '==', user.assignedUnitId));
       }
-      // Commanders or sub-commanders with full visibility get all targets for the given map.
       return q;
   }, [firestore, user]);
   
-  // Derived query for targets, filtered by current mapMode
   const targetsQuery = useMemoFirebase(() => {
       if (!targetsBaseQuery) return null;
-      return query(targetsBaseQuery, where('mapId', '==', mapMode));
-  }, [targetsBaseQuery, mapMode]);
+      return query(targetsBaseQuery, where('mapId', '==', SINGLE_MAP_ID));
+  }, [targetsBaseQuery]);
 
   const { data: targets, isLoading: isLoadingTargets } = useCollection<OperationTarget>(targetsQuery);
 
 
   useEffect(() => {
-    const storedMapUrl = localStorage.getItem('customMapUrl');
-    const storedMapMode = localStorage.getItem('mapMode') as MapMode;
+    const storedMapUrl = localStorage.getItem('mainMapUrl');
     if (storedMapUrl) {
-      setCustomMapUrl(storedMapUrl);
-    }
-    if (storedMapMode) {
-      setMapMode(storedMapMode);
+      setMapUrl(storedMapUrl);
     }
   }, []);
 
   const handleSaveCustomMap = () => {
-    setCustomMapUrl(tempCustomMapUrl);
-    localStorage.setItem('customMapUrl', tempCustomMapUrl);
-    setMapMode('custom');
-    localStorage.setItem('mapMode', 'custom');
+    setMapUrl(tempMapUrl);
+    localStorage.setItem('mainMapUrl', tempMapUrl);
     setIsMapImportOpen(false);
+    setTempMapUrl('');
   };
-
-  const handleMapModeChange = (value: string) => {
-    const newMode = value as MapMode;
-    setMapMode(newMode);
-    localStorage.setItem('mapMode', newMode);
-  }
-
-  const mapImageSrc = () => {
-    if (mapMode === 'custom' && customMapUrl) {
-      return customMapUrl;
-    }
-    const selectedMap = PlaceHolderImages.find(
-      (img) => img.id === (mapMode === 'azerbaijan' ? 'azerbaijan-map' : 'karabakh-map')
-    );
-    return selectedMap?.imageUrl ?? PlaceHolderImages[0].imageUrl;
-  }
-  
-  const mapImageAlt = () => {
-     if (mapMode === 'custom') {
-      return 'Custom imported map';
-    }
-    const selectedMap = PlaceHolderImages.find(
-      (img) => img.id === (mapMode === 'azerbaijan' ? 'azerbaijan-map' : 'karabakh-map')
-    );
-    return selectedMap?.description ?? 'Map';
-  }
 
 
   const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -180,7 +138,7 @@ export default function MapPlaceholder() {
         latitude: targetCoordinates.y,
         longitude: targetCoordinates.x,
         status: targetStatus,
-        mapId: mapMode,
+        mapId: SINGLE_MAP_ID,
     };
     
     const targetWithId = { ...newTarget, id: uuidv4() };
@@ -253,22 +211,6 @@ export default function MapPlaceholder() {
       <div className="flex-shrink-0 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Əməliyyat Xəritəsi</h1>
         <div className="flex items-center gap-6">
-          <RadioGroup value={mapMode} onValueChange={handleMapModeChange} className="flex items-center gap-4">
-            <Label htmlFor="map-azerbaijan" className="flex items-center gap-2 cursor-pointer">
-              <RadioGroupItem value="azerbaijan" id="map-azerbaijan" />
-              Ümumi Xəritə
-            </Label>
-            <Label htmlFor="map-karabakh" className="flex items-center gap-2 cursor-pointer">
-              <RadioGroupItem value="karabakh" id="map-karabakh" />
-              Qarabağ
-            </Label>
-             {customMapUrl && (
-              <Label htmlFor="map-custom" className="flex items-center gap-2 cursor-pointer">
-                <RadioGroupItem value="custom" id="map-custom" />
-                İdxal edilmiş
-              </Label>
-            )}
-          </RadioGroup>
           <Button variant="outline" size="sm" onClick={() => setIsMapImportOpen(true)}>
             <Upload className="mr-2 h-4 w-4" />
             Xəritəni Dəyişdir
@@ -286,11 +228,11 @@ export default function MapPlaceholder() {
           <TooltipProvider>
             <div className="relative w-full h-full rounded-md overflow-hidden bg-muted" onClick={isCommander ? handleMapClick : undefined}>
               <Image
-                src={mapImageSrc()}
-                alt={mapImageAlt()}
+                src={mapUrl}
+                alt="Ümumi əməliyyat xəritəsi"
                 fill
                 className="object-cover"
-                unoptimized={mapMode === 'custom'}
+                unoptimized
               />
               {/* Render Units */}
               {units?.map((unit) => (
@@ -367,8 +309,8 @@ export default function MapPlaceholder() {
                 <Input 
                     id="map-url"
                     placeholder="https://example.com/map.jpg"
-                    value={tempCustomMapUrl}
-                    onChange={(e) => setTempCustomMapUrl(e.target.value)}
+                    value={tempMapUrl}
+                    onChange={(e) => setTempMapUrl(e.target.value)}
                 />
             </div>
             <DialogFooter>
