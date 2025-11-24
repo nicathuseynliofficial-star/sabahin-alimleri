@@ -13,18 +13,15 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth-provider";
 import { LogOut, Map, Shield, UserCircle, Users } from "lucide-react";
-import EncryptionLogPanel from "./encryption-log-panel";
 
 type View = 'map' | 'units';
 
 interface DashboardSidebarProps {
   activeView: View;
   setActiveView: (view: View) => void;
-  encryptionStep: number;
-  isEncrypting: boolean;
 }
 
-export function DashboardSidebar({ activeView, setActiveView, encryptionStep, isEncrypting }: DashboardSidebarProps) {
+export function DashboardSidebar({ activeView, setActiveView }: DashboardSidebarProps) {
   const { user, logout } = useAuth();
   const isCommander = user?.role === 'commander';
 
@@ -71,8 +68,6 @@ export function DashboardSidebar({ activeView, setActiveView, encryptionStep, is
                     </SidebarMenuItem>
                 )}
             </SidebarMenu>
-            
-            {isCommander && <EncryptionLogPanel activeStep={encryptionStep} isEncrypting={isEncrypting} />}
         </SidebarContent>
 
         <SidebarFooter>

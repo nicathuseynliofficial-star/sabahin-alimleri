@@ -33,13 +33,9 @@ const SINGLE_MAP_ID = 'main';
 export default function MapPlaceholder({
   isEncrypting,
   setIsEncrypting,
-  encryptionStep,
-  setEncryptionStep
 }: {
   isEncrypting: boolean;
   setIsEncrypting: (isEncrypting: boolean) => void;
-  encryptionStep: number;
-  setEncryptionStep: (step: number) => void;
 }) {
   const { user } = useAuth();
   const { firestore } = useFirebase();
@@ -60,6 +56,7 @@ export default function MapPlaceholder({
 
   // State for delete confirmation dialog
   const [targetToDelete, setTargetToDelete] = useState<OperationTarget | null>(null);
+  const [isClearAllDialogOpen, setIsClearAllDialogOpen] = useState(false);
   
   const decoysQuery = useMemoFirebase(() => {
     if (!firestore) return null;
@@ -204,7 +201,7 @@ export default function MapPlaceholder({
     const lng4 = interpolate(originalLng, decoyLng, 0.8).toFixed(4);
 
     return `1. Collatz Qarışdırması
-→ İlkin koordinat: ${originalLat.toFixed(4)}, ${originalLng.toFixed(4)}
+→ İlkin koordinat emal edilir...
 → Nəticə: ${lat1}, ${lng1}
 
 2. Prime-Jump Şifrələməsi
@@ -216,7 +213,7 @@ export default function MapPlaceholder({
 → Nəticə: ${lat3}, ${lng3}
 
 4. Lehmer RNG Sürüşdürməsi
-→ Təsadüfi, lakin təkrarlanabilən sürüşdürmə...
+→ Təsadüfi sürüşdürmə tətbiq edilir...
 → Nəticə: ${lat4}, ${lng4}
 
 5. Kvant Geo-Sürüşdürmə
@@ -239,21 +236,7 @@ export default function MapPlaceholder({
         return;
     }
     
-    setEncryptionStep(0);
     setIsEncrypting(true);
-    
-    // Simulate step-by-step encryption for the UI panel
-    const stepInterval = setInterval(() => {
-        setEncryptionStep(prev => {
-            if (prev >= 6) {
-                clearInterval(stepInterval);
-                setIsEncrypting(false);
-                return prev;
-            }
-            return prev + 1;
-        });
-    }, 700);
-
 
     toast({
       title: 'Əməliyyat Başladı',
@@ -272,9 +255,9 @@ export default function MapPlaceholder({
             const decoyInput: GenerateStrategicDecoysInput = {
                 latitude: target.latitude,
                 longitude: target.longitude,
-                terrainType: 'mountainous', // Can be made dynamic
-                proximityToPopulatedAreas: 'low', // Can be made dynamic
-                knownEnemyPatrolRoutes: 'None reported', // Can be made dynamic
+                terrainType: 'mountainous',
+                proximityToPopulatedAreas: 'low',
+                knownEnemyPatrolRoutes: 'None reported',
                 radiusKm: 15
             };
             const decoyResult = await generateStrategicDecoys(decoyInput);
@@ -309,9 +292,9 @@ export default function MapPlaceholder({
             title: 'Əməliyyat Xətası',
             description: 'Yem koordinatları yaradılarkən problem baş verdi.',
         });
-        clearInterval(stepInterval); // Stop animation on error
-        setIsEncrypting(false);
-    } 
+    } finally {
+      setIsEncrypting(false);
+    }
   };
 
   const handleEditTargetClick = (target: OperationTarget) => {
@@ -357,6 +340,41 @@ export default function MapPlaceholder({
     }
   };
 
+  const handleClearAllPoints = async () => {
+    if (!firestore) return;
+
+    const batch = writeBatch(firestore);
+    
+    try {
+        const collectionsToClear = ['military_units', 'operation_targets', 'decoys'];
+        
+        for (const collectionName of collectionsToClear) {
+            const collectionRef = collection(firestore, collectionName);
+            const snapshot = await getDocs(collectionRef);
+            snapshot.forEach((doc) => {
+                batch.delete(doc.ref);
+            });
+        }
+        
+        await batch.commit();
+
+        toast({
+            title: "Xəritə Təmizləndi",
+            description: "Bütün bölüklər, hədəflər və yemlər xəritədən silindi."
+        });
+
+    } catch (error) {
+        console.error("Error clearing all points:", error);
+        toast({
+            variant: "destructive",
+            title: "Təmizləmə Xətası",
+            description: "Xəritə təmizlənərkən bir problem yarandı."
+        });
+    } finally {
+      setIsClearAllDialogOpen(false);
+    }
+  };
+
 
   const getTargetClasses = (status: OperationTarget['status']) => {
     switch (status) {
@@ -384,6 +402,10 @@ export default function MapPlaceholder({
               <Button size="sm" onClick={handleStartOperation} disabled={isEncrypting}>
                 <Bot className="mr-2 h-4 w-4" />
                 {isEncrypting ? 'Əməliyyat Gedir...' : 'Əməliyyata Başla'}
+              </Button>
+              <Button variant="destructive" size="sm" onClick={() => setIsClearAllDialogOpen(true)} disabled={isEncrypting}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                Nöqtələri Təmizlə
               </Button>
             </>
           )}
@@ -576,6 +598,24 @@ export default function MapPlaceholder({
             <AlertDialogCancel onClick={() => setTargetToDelete(null)}>Ləğv Et</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDeleteTarget} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Bəli, Sil
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Clear All Points Confirmation Dialog */}
+      <AlertDialog open={isClearAllDialogOpen} onOpenChange={setIsClearAllDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Bütün Nöqtələri Təmizlə</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bu əməliyyat xəritədəki bütün bölükləri, hədəfləri və yemləri birdəfəlik siləcək. Davam etmək istədiyinizdən əminsiniz? Bu əməliyyat geri qaytarıla bilməz.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Ləğv Et</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearAllPoints} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Bəli, Hamısını Sil
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
