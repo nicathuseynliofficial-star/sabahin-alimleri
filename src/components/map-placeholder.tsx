@@ -60,7 +60,7 @@ export default function MapPlaceholder() {
 
 
   // Base query for units
-  const unitsBaseQuery = useMemoFirebase(() => {
+  const unitsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     const q = collection(firestore, 'military_units');
 
@@ -69,11 +69,6 @@ export default function MapPlaceholder() {
     }
     return q;
   }, [firestore, user]);
-
-  const unitsQuery = useMemoFirebase(() => {
-      if (!unitsBaseQuery) return null;
-      return query(unitsBaseQuery, where('mapId', '==', SINGLE_MAP_ID));
-  }, [unitsBaseQuery]);
 
   const { data: units, isLoading: isLoadingUnits } = useCollection<MilitaryUnit>(unitsQuery);
 
