@@ -5,11 +5,10 @@ import { useRouter } from 'next/navigation';
 import { 
   onAuthStateChanged, 
   signInAnonymously,
-  signOut as firebaseSignOut,
   type User as FirebaseUser
 } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import type { UserProfile } from '@/lib/types';
 import { useToast } from './use-toast';
 
@@ -62,6 +61,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (username: string, pass: string) => {
     setLoading(true);
     try {
+      // Hardcoded check for the main commander
+      if (username === 'Nicat' && pass === 'Nicat2025') {
+        const commanderProfile: UserProfile = {
+          id: 'admin_nicat',
+          username: 'Nicat',
+          role: 'commander',
+          canSeeAllUnits: true,
+        };
+        setUser(commanderProfile);
+        localStorage.setItem('user', JSON.stringify(commanderProfile));
+        router.push('/komandir');
+        setLoading(false);
+        return;
+      }
+
+      // Existing logic for other users
       const q = query(
         collection(db, "users"),
         where("username", "==", username),
@@ -103,8 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('user');
     setUser(null);
     // We can keep the anonymous session for public data access
-    // If you truly want to sign out completely, you can call await firebaseSignOut(auth);
-    // and then signInAnonymously again. For simplicity, we'll just clear local state.
+    // For simplicity, we'll just clear local state.
     setLoading(false);
     router.push('/login');
   };
