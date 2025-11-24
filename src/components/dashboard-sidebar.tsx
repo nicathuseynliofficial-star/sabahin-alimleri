@@ -20,9 +20,11 @@ type View = 'map' | 'units';
 interface DashboardSidebarProps {
   activeView: View;
   setActiveView: (view: View) => void;
+  encryptionStep: number;
+  isEncrypting: boolean;
 }
 
-export function DashboardSidebar({ activeView, setActiveView }: DashboardSidebarProps) {
+export function DashboardSidebar({ activeView, setActiveView, encryptionStep, isEncrypting }: DashboardSidebarProps) {
   const { user, logout } = useAuth();
   const isCommander = user?.role === 'commander';
 
@@ -70,7 +72,7 @@ export function DashboardSidebar({ activeView, setActiveView }: DashboardSidebar
                 )}
             </SidebarMenu>
             
-            {isCommander && <EncryptionLogPanel />}
+            {isCommander && <EncryptionLogPanel activeStep={encryptionStep} isEncrypting={isEncrypting} />}
         </SidebarContent>
 
         <SidebarFooter>

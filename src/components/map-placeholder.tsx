@@ -21,6 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 import { generateStrategicDecoys, type GenerateStrategicDecoysInput } from '@/ai/flows/generate-strategic-decoys';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
+import EncryptionLogPanel from './encryption-log-panel';
 
 
 type ClickCoordinates = {
@@ -50,6 +51,7 @@ export default function MapPlaceholder() {
   
   // State for decoy generation
   const [isEncrypting, setIsEncrypting] = useState(false);
+  const [encryptionStep, setEncryptionStep] = useState(0);
 
   // State for delete confirmation dialog
   const [targetToDelete, setTargetToDelete] = useState<OperationTarget | null>(null);
@@ -194,8 +196,23 @@ export default function MapPlaceholder() {
         });
         return;
     }
-
+    
+    setEncryptionStep(0);
     setIsEncrypting(true);
+    
+    // Simulate step-by-step encryption for the UI panel
+    const stepInterval = setInterval(() => {
+        setEncryptionStep(prev => {
+            if (prev >= 6) {
+                clearInterval(stepInterval);
+                setIsEncrypting(false);
+                return prev;
+            }
+            return prev + 1;
+        });
+    }, 700);
+
+
     toast({
       title: 'Əməliyyat Başladı',
       description: `${activeTargets.length} aktiv hədəf üçün yem koordinatları yaradılır...`,
@@ -222,12 +239,12 @@ export default function MapPlaceholder() {
             
             const publicNames = ["Alfa", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"];
 
-            // Create a detailed reasoning string for simulation
             const initialLat = target.latitude.toFixed(4);
             const initialLon = target.longitude.toFixed(4);
             const finalLat = decoyResult.decoyLatitude.toFixed(4);
             const finalLon = decoyResult.decoyLongitude.toFixed(4);
-
+            
+            // Simulate intermediate coordinates for the log
             const step1Lat = (target.latitude + (decoyResult.decoyLatitude - target.latitude) * 0.25).toFixed(4);
             const step1Lon = (target.longitude + (decoyResult.decoyLongitude - target.longitude) * 0.25).toFixed(4);
             const step2Lat = (target.latitude + (decoyResult.decoyLatitude - target.latitude) * 0.5).toFixed(4);
@@ -235,29 +252,7 @@ export default function MapPlaceholder() {
             const step3Lat = (target.latitude + (decoyResult.decoyLatitude - target.latitude) * 0.75).toFixed(4);
             const step3Lon = (target.longitude + (decoyResult.decoyLongitude - target.longitude) * 0.75).toFixed(4);
 
-
-            const detailedReasoning = `
-[SİSTEM] Əməliyyat gözlənilir...\n
-1. Collatz Qarışdırması
-→ İlkin koordinat: ${initialLat}, ${initialLon}
-→ Nəticə: ${step1Lat}, ${step1Lon}\n
-2. Prime-Jump Şifrələməsi
-→ Sadə ədəd cədvəli tətbiq edilir...
-→ Nəticə: ${step2Lat}, ${step2Lon}\n
-3. Fibonaççi Spiralı
-→ Spiral ofset tətbiq edilir...
-→ Nəticə: ${step3Lat}, ${step3Lon}\n
-4. Lehmer RNG Sürüşdürməsi
-→ Təsadüfi, lakin təkrarlanabilən sürüşdürmə...
-→ Nəticə: ${finalLat}, ${finalLon}\n
-5. AI Strateji Analizi
-→ Yekun təhlükəsizlik layı tətbiq edildi.
-→ Yem koordinatı: ${decoyResult.decoyLatitude.toFixed(6)}, ${decoyResult.decoyLongitude.toFixed(6)}\n
-[SİSTEM] Proses tamamlandı. Yem yayıma hazırdır.\n
----
-AI Əsaslandırması: ${decoyResult.reasoning}
-            `.trim();
-
+            const detailedReasoning = `[SİSTEM] Əməliyyat gözlənilir...\n\n1. Collatz Qarışdırması\n→ İlkin koordinat: ${initialLat}, ${initialLon}\n→ Nəticə: ${step1Lat}, ${step1Lon}\n\n2. Prime-Jump Şifrələməsi\n→ Sadə ədəd cədvəli tətbiq edilir...\n→ Nəticə: ${step2Lat}, ${step2Lon}\n\n3. Fibonaççi Spiralı\n→ Spiral ofset tətbiq edilir...\n→ Nəticə: ${step3Lat}, ${step3Lon}\n\n4. Lehmer RNG Sürüşdürməsi\n→ Təsadüfi, lakin təkrarlanabilən sürüşdürmə...\n→ Nəticə: ${finalLat}, ${finalLon}\n\n5. Kvant Geo-Sürüşdürmə\n→ Yekun təhlükəsizlik layı tətbiq edildi.\n→ Yem koordinatı: ${decoyResult.decoyLatitude.toFixed(6)}, ${decoyResult.decoyLongitude.toFixed(6)}\n\n[SİSTEM] Proses tamamlandı. Yem yayıma hazırdır.`;
 
             const newDecoy: Decoy = {
                 id: uuidv4(),
@@ -285,9 +280,9 @@ AI Əsaslandırması: ${decoyResult.reasoning}
             title: 'Əməliyyat Xətası',
             description: 'Yem koordinatları yaradılarkən problem baş verdi.',
         });
-    } finally {
+        clearInterval(stepInterval); // Stop animation on error
         setIsEncrypting(false);
-    }
+    } 
   };
 
   const handleEditTargetClick = (target: OperationTarget) => {
@@ -433,12 +428,12 @@ AI Əsaslandırması: ${decoyResult.reasoning}
                         </div>
                       </div>
                     </TooltipTrigger>
-                    <TooltipContent data-interactive className="font-mono text-xs whitespace-pre-wrap">
+                    <TooltipContent data-interactive className="font-mono text-xs whitespace-pre-wrap max-w-sm">
                         <p className='font-bold text-red-400'>Yem Hədəf: {decoy.publicName}</p>
                         {isCommander && (
                           <div className='mt-2 pt-2 border-t border-border'>
                               <p className='font-semibold text-sm mb-1'>Şifrələnmə Jurnalı:</p>
-                              <div className='text-muted-foreground max-w-xs'>{decoy.reasoning}</div>
+                              <div className='text-muted-foreground'>{decoy.reasoning}</div>
                           </div>
                         )}
                     </TooltipContent>

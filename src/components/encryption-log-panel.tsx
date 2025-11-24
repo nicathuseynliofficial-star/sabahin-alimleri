@@ -1,66 +1,86 @@
+"use client";
 
-"use client"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { Cpu, ShieldCheck } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
-import { Cpu, ShieldCheck } from "lucide-react"
+interface EncryptionLogPanelProps {
+  activeStep: number;
+  isEncrypting: boolean;
+}
 
-// Bu, AI axınının arxa planda necə işlədiyini simulyasiya edən bir komponentdir.
-// Hər addımda koordinatların necə dəyişdiyini göstərir.
-export default function EncryptionLogPanel() {
+const steps = [
+    {
+        title: "1. Collatz Qarışdırması",
+        details: ["→ İlkin koordinat emal edilir...", "→ Nəticə: Gizlədilib"],
+    },
+    {
+        title: "2. Prime-Jump Şifrələməsi",
+        details: ["→ Sadə ədəd cədvəli tətbiq edilir...", "→ Nəticə: Gizlədilib"],
+    },
+    {
+        title: "3. Fibonaççi Spiralı",
+        details: ["→ Spiral ofset tətbiq edilir...", "→ Nəticə: Gizlədilib"],
+    },
+    {
+        title: "4. Lehmer RNG Sürüşdürməsi",
+        details: ["→ Təsadüfi sürüşdürmə tətbiq edilir...", "→ Nəticə: Gizlədilib"],
+    },
+    {
+        title: "5. Kvant Geo-Sürüşdürmə",
+        details: ["→ Yekun təhlükəsizlik layı tətbiq edildi.", "→ Yem koordinatı: TƏSDİQLƏNDİ"],
+        isFinal: true,
+    },
+];
+
+export default function EncryptionLogPanel({ activeStep, isEncrypting }: EncryptionLogPanelProps) {
+
+    const getStepClass = (stepIndex: number) => {
+        const isActive = isEncrypting && activeStep > stepIndex;
+        if (isActive) {
+            return steps[stepIndex].isFinal ? "text-green-400" : "text-yellow-400";
+        }
+        return "text-muted-foreground";
+    };
+
     return (
         <div className="p-2 mt-auto">
             <Separator className="my-2" />
             <Card className="bg-transparent border-none shadow-none">
                 <CardHeader className="p-2">
                     <CardTitle className="text-sm font-medium flex items-center gap-2">
-                        <Cpu className="w-4 h-4 text-accent" />
+                        <Cpu className={cn("w-4 h-4", isEncrypting ? "text-accent animate-pulse" : "text-muted-foreground")} />
                         <span>Şifrələmə Jurnalı</span>
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="p-2">
                     <ScrollArea className="h-48 w-full rounded-md border border-dashed border-border p-2">
-                        <div className="text-xs text-muted-foreground space-y-3 font-mono">
-                            <p className="text-accent">[SİSTEM] Əməliyyat gözlənilir...</p>
-                            
-                            <div>
-                                <p className="font-semibold">1. Collatz Qarışdırması</p>
-                                <p className="pl-2">→ İlkin koordinat: 40.37, 49.84</p>
-                                <p className="pl-2">→ Nəticə: <span className="text-yellow-400">40.41, 49.88</span></p>
-                            </div>
-                            
-                            <div>
-                                <p className="font-semibold">2. Prime-Jump Şifrələməsi</p>
-                                <p className="pl-2">→ Sadə ədəd cədvəli tətbiq edilir...</p>
-                                <p className="pl-2">→ Nəticə: <span className="text-yellow-400">40.39, 49.91</span></p>
-                            </div>
-                            
-                             <div>
-                                <p className="font-semibold">3. Fibonaççi Spiralı</p>
-                                <p className="pl-2">→ Spiral ofset tətbiq edilir...</p>
-                                <p className="pl-2">→ Nəticə: <span className="text-yellow-400">40.45, 49.89</span></p>
-                            </div>
+                        <div className="text-xs space-y-3 font-mono">
+                            <p className={cn("transition-colors", isEncrypting ? "text-accent" : "text-muted-foreground")}>
+                                {isEncrypting ? "[SİSTEM] Əməliyyat icra edilir..." : "[SİSTEM] Əməliyyat gözlənilir..."}
+                            </p>
 
-                             <div>
-                                <p className="font-semibold">4. Lehmer RNG Sürüşdürməsi</p>
-                                <p className="pl-2">→ Təsadüfi, lakin təkrarlanabilən sürüşdürmə...</p>
-                                <p className="pl-2">→ Nəticə: <span className="text-yellow-400">40.48, 49.93</span></p>
-                            </div>
-                            
-                            <div>
-                                <div className="font-semibold flex items-center gap-2">
-                                  <ShieldCheck size={14} className="text-green-500" />
-                                  <span>5. Kvant Geo-Sürüşdürmə</span>
+                            {steps.map((step, index) => (
+                                <div key={index} className={cn("transition-colors", getStepClass(index))}>
+                                    <p className="font-semibold flex items-center gap-2">
+                                     {step.isFinal && <ShieldCheck size={14} />}
+                                     {step.title}
+                                    </p>
+                                    {step.details.map((detail, detailIndex) => (
+                                         <p key={detailIndex} className="pl-2">{detail}</p>
+                                    ))}
                                 </div>
-                                <p className="pl-2">→ Yekun təhlükəsizlik layı tətbiq edildi.</p>
-                                <p className="pl-2">→ Yem koordinatı: <span className="text-green-400 font-bold">40.4812, 49.9334</span></p>
-                            </div>
-                            <p className="text-accent">[SİSTEM] Proses tamamlandı. Yem yayıma hazırdır.</p>
+                            ))}
+
+                            <p className={cn("transition-colors", activeStep > steps.length ? "text-green-400" : "text-muted-foreground")}>
+                                [SİSTEM] Proses tamamlandı. Yem yayıma hazırdır.
+                            </p>
                         </div>
                     </ScrollArea>
                 </CardContent>
             </Card>
         </div>
-    )
+    );
 }
