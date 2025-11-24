@@ -32,9 +32,12 @@ export interface OperationTarget {
 
 export interface Decoy {
   id: string;
+  publicName: string; // e.g. "Bölük Alfa"
   latitude: number;
   longitude: number;
   reasoning: string;
   timestamp: Timestamp;
   originalTargetId: string;
 }
+
+    

@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useFirebase, useDoc, useMemoFirebase } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
+import { collection } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
@@ -13,12 +13,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/t
 export default function PublicMapView() {
   const { firestore } = useFirebase();
   
-  const latestDecoyDocRef = useMemoFirebase(() => {
+  const decoysQuery = useMemoFirebase(() => {
     if (!firestore) return null;
-    return doc(firestore, 'decoys', 'latest');
+    return collection(firestore, 'decoys');
   }, [firestore]);
 
-  const { data: decoy, isLoading } = useDoc<Decoy>(latestDecoyDocRef);
+  const { data: decoys, isLoading } = useCollection<Decoy>(decoysQuery);
 
   const mapImage = PlaceHolderImages.find((img) => img.id === 'azerbaijan-map');
 
@@ -64,28 +64,29 @@ export default function PublicMapView() {
                       <Skeleton className='w-48 h-4 mx-auto' />
                   </div>
               </div>
-            ) : !decoy ? (
+            ) : !decoys || decoys.length === 0 ? (
               <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                   <p className="text-white">Hal-hazırda aktiv yem mövqeyi yoxdur.</p>
               </div>
             ) : (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div
-                    className="absolute transition-all duration-1000"
-                    style={{ top: `${decoy.latitude}%`, left: `${decoy.longitude}%`, transform: 'translate(-50%, -50%)' }}
-                  >
-                    <div className="relative w-6 h-6">
-                      <div className="absolute inset-0 bg-red-600 rounded-full pulse-anim"></div>
-                      <div className="absolute inset-1 bg-red-400 rounded-full"></div>
+              decoys.map((decoy) => (
+                <Tooltip key={decoy.id}>
+                    <TooltipTrigger asChild>
+                    <div
+                        className="absolute transition-all duration-1000"
+                        style={{ top: `${decoy.latitude}%`, left: `${decoy.longitude}%`, transform: 'translate(-50%, -50%)' }}
+                    >
+                        <div className="relative w-6 h-6">
+                            <div className="absolute inset-0 bg-red-600 rounded-full pulse-anim"></div>
+                            <div className="absolute inset-1 bg-red-400 rounded-full"></div>
+                        </div>
                     </div>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className='font-bold text-red-400'>Yem Hədəf (Decoy)</p>
-                  <p className='text-muted-foreground max-w-xs'>Səbəb: {decoy.reasoning}</p>
-                </TooltipContent>
-              </Tooltip>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p className='font-bold text-red-400'>{decoy.publicName || 'Yem Hədəf'}</p>
+                    </TooltipContent>
+                </Tooltip>
+              ))
             )}
           </div>
         </TooltipProvider>
@@ -96,3 +97,5 @@ export default function PublicMapView() {
     </Card>
   );
 }
+
+    

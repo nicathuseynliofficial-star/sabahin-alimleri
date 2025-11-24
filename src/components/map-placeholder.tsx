@@ -7,15 +7,15 @@ import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Label } from './ui/label';
 import { Switch } from './ui/switch';
-import { Map, Shield, Target, Upload, Dot } from 'lucide-react';
+import { Map, Shield, Target, Upload, Dot, Bot, Trash2, Edit } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth-provider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { useFirebase, useCollection, useMemoFirebase, useDoc } from '@/firebase';
-import { addDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
-import { collection, query, where, doc } from 'firebase/firestore';
+import { addDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { collection, query, where, doc, getDocs, writeBatch } from 'firebase/firestore';
 import type { MilitaryUnit, OperationTarget, Decoy } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 import { useToast } from '@/hooks/use-toast';
@@ -39,24 +39,22 @@ export default function MapPlaceholder() {
   const [tempMapUrl, setTempMapUrl] = useState('');
   const [isMapImportOpen, setIsMapImportOpen] = useState(false);
 
-  // State for the new target dialog
+  // State for the new/edit target dialog
   const [isTargetDialogOpen, setIsTargetDialogOpen] = useState(false);
   const [targetCoordinates, setTargetCoordinates] = useState<ClickCoordinates>(null);
   const [targetName, setTargetName] = useState('');
   const [assignedUnitId, setAssignedUnitId] = useState('');
   const [targetStatus, setTargetStatus] = useState<OperationTarget['status']>('pending');
+  const [editingTarget, setEditingTarget] = useState<OperationTarget | null>(null);
   
   // State for decoy generation
   const [isEncrypting, setIsEncrypting] = useState(false);
-  const [selectedTargetForDecoy, setSelectedTargetForDecoy] = useState<OperationTarget | null>(null);
-
-  // Listen to the 'latest' decoy document
-  const latestDecoyDocRef = useMemoFirebase(() => {
+  
+  const decoysQuery = useMemoFirebase(() => {
     if (!firestore) return null;
-    return doc(firestore, 'decoys', 'latest');
+    return collection(firestore, 'decoys');
   }, [firestore]);
-  const { data: latestDecoy } = useDoc<Decoy>(latestDecoyDocRef);
-
+  const { data: decoys } = useCollection<Decoy>(decoysQuery);
 
   // Base query for units
   const unitsQuery = useMemoFirebase(() => {
@@ -84,8 +82,6 @@ export default function MapPlaceholder() {
   
   const targetsQuery = useMemoFirebase(() => {
       if (!targetsBaseQuery) return null;
-      // As we only have one map now, we don't need to filter by mapId. 
-      // If we re-introduce multiple maps, this is where to add the filter.
       return targetsBaseQuery;
   }, [targetsBaseQuery]);
 
@@ -94,8 +90,11 @@ export default function MapPlaceholder() {
 
   useEffect(() => {
     const storedMapUrl = localStorage.getItem('mainMapUrl');
+    const defaultMap = PlaceHolderImages.find(img => img.id === 'azerbaijan-map')?.imageUrl;
     if (storedMapUrl) {
       setMapUrl(storedMapUrl);
+    } else if (defaultMap) {
+      setMapUrl(defaultMap);
     }
   }, []);
 
@@ -117,99 +116,171 @@ export default function MapPlaceholder() {
     const y = ((e.clientY - rect.top) / rect.height) * 100;
     
     setTargetCoordinates({ x, y });
+    setEditingTarget(null);
+    setTargetName('');
+    setAssignedUnitId('');
+    setTargetStatus('pending');
     setIsTargetDialogOpen(true);
   };
 
-  const handleCreateTarget = () => {
-    if (!targetName || !assignedUnitId || !targetCoordinates || !firestore) {
+  const handleSaveTarget = () => {
+    if (!targetName || !assignedUnitId || !firestore) {
          toast({
             variant: "destructive",
             title: "Xəta",
-            description: "Hədəf adı, status və bölük seçilməlidir.",
+            description: "Hədəf adı və bölük seçilməlidir.",
         });
         return;
     }
-
-    const newTarget: Omit<OperationTarget, 'id'> = {
+    
+    if (editingTarget) {
+      // Update existing target
+      const targetDocRef = doc(firestore, 'operation_targets', editingTarget.id);
+      updateDocumentNonBlocking(targetDocRef, {
         name: targetName,
         assignedUnitId: assignedUnitId,
-        latitude: targetCoordinates.y,
-        longitude: targetCoordinates.x,
         status: targetStatus,
-        mapId: SINGLE_MAP_ID,
-    };
-    
-    const targetWithId = { ...newTarget, id: uuidv4() };
+      });
+      toast({
+        title: "Hədəf Yeniləndi",
+        description: `"${targetName}" adlı hədəf məlumatları yeniləndi.`
+      });
+    } else if (targetCoordinates) {
+      // Create new target
+       const newTarget: Omit<OperationTarget, 'id'> = {
+          name: targetName,
+          assignedUnitId: assignedUnitId,
+          latitude: targetCoordinates.y,
+          longitude: targetCoordinates.x,
+          status: targetStatus,
+          mapId: SINGLE_MAP_ID,
+      };
+      
+      const targetWithId = { ...newTarget, id: uuidv4() };
 
-    const targetsCollection = collection(firestore, 'operation_targets');
-    addDocumentNonBlocking(targetsCollection, targetWithId);
+      const targetsCollection = collection(firestore, 'operation_targets');
+      addDocumentNonBlocking(targetsCollection, targetWithId);
 
-    toast({
-        title: "Hədəf Yaradıldı",
-        description: `"${targetName}" adlı yeni hədəf yaradıldı və "${units?.find(u => u.id === assignedUnitId)?.name}" bölüyünə təyin edildi.`
-    });
+      toast({
+          title: "Hədəf Yaradıldı",
+          description: `"${targetName}" adlı yeni hədəf yaradıldı və "${units?.find(u => u.id === assignedUnitId)?.name}" bölüyünə təyin edildi.`
+      });
+    }
+
 
     // Reset and close dialog
     setIsTargetDialogOpen(false);
+    setEditingTarget(null);
     setTargetName('');
     setAssignedUnitId('');
     setTargetCoordinates(null);
     setTargetStatus('pending');
   };
   
-  const handleEncryptTarget = async (target: OperationTarget) => {
-    if (!firestore) return;
-    setSelectedTargetForDecoy(target);
+  const handleStartOperation = async () => {
+    if (!firestore || !targets) return;
+
+    const activeTargets = targets.filter(t => t.status === 'active');
+    if (activeTargets.length === 0) {
+        toast({
+            title: "Aktiv Hədəf Yoxdur",
+            description: "Şifrələmə üçün ən az bir 'aktiv' statuslu hədəf olmalıdır.",
+        });
+        return;
+    }
+
     setIsEncrypting(true);
+    toast({
+      title: 'Əməliyyat Başladı',
+      description: `${activeTargets.length} aktiv hədəf üçün yem koordinatları yaradılır...`,
+    });
 
     try {
-        const decoyInput: GenerateStrategicDecoysInput = {
-            latitude: target.latitude,
-            longitude: target.longitude,
-            terrainType: 'mountainous', // This can be made dynamic later
-            proximityToPopulatedAreas: 'low', // This can be made dynamic later
-            knownEnemyPatrolRoutes: 'None reported', // This can be made dynamic later
-            radiusKm: 10
-        };
+        // Clear all previous decoys first
+        const oldDecoysQuery = collection(firestore, 'decoys');
+        const oldDecoysSnapshot = await getDocs(oldDecoysQuery);
+        const deleteBatch = writeBatch(firestore);
+        oldDecoysSnapshot.forEach(doc => deleteBatch.delete(doc.ref));
+        await deleteBatch.commit();
+        
+        const decoyPromises = activeTargets.map(async (target, index) => {
+            const decoyInput: GenerateStrategicDecoysInput = {
+                latitude: target.latitude,
+                longitude: target.longitude,
+                terrainType: 'mountainous', // Can be made dynamic
+                proximityToPopulatedAreas: 'low', // Can be made dynamic
+                knownEnemyPatrolRoutes: 'None reported', // Can be made dynamic
+                radiusKm: 15
+            };
+            const decoyResult = await generateStrategicDecoys(decoyInput);
+            
+            const publicNames = ["Alfa", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"];
+            const newDecoy = {
+                id: uuidv4(),
+                publicName: `Bölük ${publicNames[index % publicNames.length]}`,
+                latitude: decoyResult.decoyLatitude,
+                longitude: decoyResult.decoyLongitude,
+                reasoning: decoyResult.reasoning,
+                originalTargetId: target.id,
+                timestamp: new Date()
+            };
+            
+            const decoyDocRef = doc(firestore, 'decoys', newDecoy.id);
+            return setDocumentNonBlocking(decoyDocRef, newDecoy, { merge: false });
+        });
 
-        const decoyResult = await generateStrategicDecoys(decoyInput);
-
-        const newDecoy = {
-            id: 'latest', // Static ID for the document
-            latitude: decoyResult.decoyLatitude,
-            longitude: decoyResult.decoyLongitude,
-            reasoning: decoyResult.reasoning,
-            originalTargetId: target.id,
-            timestamp: new Date()
-        };
-
-        const decoyDocRef = doc(firestore, 'decoys', 'latest');
-        // Use `set` with `merge: false` to completely overwrite the old decoy
-        setDocumentNonBlocking(decoyDocRef, newDecoy, { merge: false });
+        await Promise.all(decoyPromises);
 
         toast({
-            title: 'Şifrələmə Uğurlu Oldu',
-            description: `Yeni yem koordinatı yaradıldı və yayıma göndərildi.`,
+            title: 'Əməliyyat Uğurlu Oldu',
+            description: `${activeTargets.length} yeni yem koordinatı yaradıldı və yayıma göndərildi.`,
         });
+
     } catch (error) {
-        console.error('Error generating decoy:', error);
+        console.error('Error starting operation:', error);
         toast({
             variant: 'destructive',
-            title: 'Şifrələmə Xətası',
-            description: 'Yem koordinatı yaradılarkən problem baş verdi.',
+            title: 'Əməliyyat Xətası',
+            description: 'Yem koordinatları yaradılarkən problem baş verdi.',
         });
     } finally {
         setIsEncrypting(false);
-        setSelectedTargetForDecoy(null);
     }
   };
 
-  const getTargetClasses = (target: OperationTarget) => {
-    const isEncryptingTarget = isEncrypting && selectedTargetForDecoy?.id === target.id;
-    if (isEncryptingTarget) {
-      return 'animate-ping text-yellow-400';
-    }
+  const handleEditTargetClick = (target: OperationTarget) => {
+    setEditingTarget(target);
+    setTargetName(target.name);
+    setAssignedUnitId(target.assignedUnitId);
+    setTargetStatus(target.status);
+    setTargetCoordinates(null); // Not changing coordinates on edit
+    setIsTargetDialogOpen(true);
+  };
+  
+  const handleDeleteTargetClick = async (target: OperationTarget) => {
+     if (!firestore) return;
+     const confirmation = confirm(`"${target.name}" adlı hədəfi silmək istədiyinizdən əminsiniz? Bu əməliyyat geri qaytarıla bilməz.`);
+     if (confirmation) {
+        // Delete the target
+        const targetDocRef = doc(firestore, 'operation_targets', target.id);
+        deleteDocumentNonBlocking(targetDocRef);
+        
+        // Also delete any associated decoys
+        const decoysToDeleteQuery = query(collection(firestore, 'decoys'), where('originalTargetId', '==', target.id));
+        const decoysSnapshot = await getDocs(decoysToDeleteQuery);
+        decoysSnapshot.forEach(decoyDoc => {
+            deleteDocumentNonBlocking(decoyDoc.ref);
+        });
 
+        toast({
+            title: "Hədəf Silindi",
+            description: `"${target.name}" adlı hədəf və əlaqəli yemlər silindi.`
+        });
+     }
+  }
+
+
+  const getTargetClasses = (target: OperationTarget) => {
     let colorClass = '';
     switch (target.status) {
       case 'active':
@@ -224,7 +295,6 @@ export default function MapPlaceholder() {
         break;
     }
     
-    // Commanders see pulsing targets, sub-commanders see static ones unless they can see all
     if (isCommander || (user?.role === 'sub-commander' && user.canSeeAllUnits)) {
         return `${colorClass} animate-pulse`;
     }
@@ -237,12 +307,18 @@ export default function MapPlaceholder() {
     <div className="h-screen w-full flex flex-col p-4 gap-4">
       <div className="flex-shrink-0 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Əməliyyat Xəritəsi</h1>
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-2">
           {isCommander && (
-            <Button variant="outline" size="sm" onClick={() => setIsMapImportOpen(true)}>
-              <Upload className="mr-2 h-4 w-4" />
-              Xəritəni Dəyişdir
-            </Button>
+            <>
+              <Button variant="outline" size="sm" onClick={() => setIsMapImportOpen(true)}>
+                <Upload className="mr-2 h-4 w-4" />
+                Xəritəni Dəyişdir
+              </Button>
+              <Button size="sm" onClick={handleStartOperation} disabled={isEncrypting}>
+                <Bot className="mr-2 h-4 w-4" />
+                {isEncrypting ? 'Əməliyyat Gedir...' : 'Əməliyyata Başla'}
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -279,28 +355,30 @@ export default function MapPlaceholder() {
                             <Target className={`w-8 h-8 ${getTargetClasses(target)}`} />
                         </div>
                     </TooltipTrigger>
-                    <TooltipContent>
+                    <TooltipContent className="p-0">
+                      <div className='p-2'>
                         <p>Hədəf: {target.name}</p>
                         <p className='text-muted-foreground'>Bölük: {units?.find(u => u.id === target.assignedUnitId)?.name ?? 'Naməlum'}</p>
                          <p className='text-muted-foreground capitalize'>Status: {target.status}</p>
+                      </div>
                         {isCommander && (
-                        <Button 
-                            size="sm" 
-                            className="mt-2 w-full bg-accent text-accent-foreground"
-                            onClick={() => handleEncryptTarget(target)}
-                            disabled={isEncrypting}
-                        >
-                            {isEncrypting && selectedTargetForDecoy?.id === target.id ? 'Şifrələnir...' : 'Hədəfi Şifrələ'}
-                        </Button>
+                          <div className='flex items-center border-t mt-1 p-1'>
+                            <Button variant="ghost" size="sm" className="w-full justify-start gap-1" onClick={() => handleEditTargetClick(target)}>
+                              <Edit size={14} /> Redaktə et
+                            </Button>
+                            <Button variant="ghost" size="sm" className="w-full justify-start gap-1 text-destructive hover:text-destructive" onClick={() => handleDeleteTargetClick(target)}>
+                              <Trash2 size={14} /> Sil
+                            </Button>
+                          </div>
                         )}
                     </TooltipContent>
                 </Tooltip>
               ))}
-               {/* Render Latest Decoy */}
-              {latestDecoy && (
-                 <Tooltip>
+               {/* Render Decoys */}
+              {decoys?.map((decoy) => (
+                 <Tooltip key={decoy.id}>
                     <TooltipTrigger asChild>
-                      <div className="absolute" style={{ top: `${latestDecoy.latitude}%`, left: `${latestDecoy.longitude}%`, transform: 'translate(-50%, -50%)' }}>
+                      <div className="absolute" style={{ top: `${decoy.latitude}%`, left: `${decoy.longitude}%`, transform: 'translate(-50%, -50%)' }}>
                         <div className="relative w-6 h-6">
                             <div className="absolute inset-0 bg-red-600 rounded-full pulse-anim"></div>
                             <div className="absolute inset-1 bg-red-400 rounded-full"></div>
@@ -309,10 +387,11 @@ export default function MapPlaceholder() {
                     </TooltipTrigger>
                     <TooltipContent>
                         <p className='font-bold text-red-400'>Yem Hədəf (Decoy)</p>
-                        <p className='text-muted-foreground max-w-xs'>Səbəb: {latestDecoy.reasoning}</p>
+                        <p className='text-muted-foreground'>Ad: {decoy.publicName}</p>
+                        {isCommander && <p className='text-muted-foreground max-w-xs'>Səbəb: {decoy.reasoning}</p>}
                     </TooltipContent>
                 </Tooltip>
-              )}
+              ))}
             </div>
           </TooltipProvider>
         </CardContent>
@@ -343,13 +422,13 @@ export default function MapPlaceholder() {
         </DialogContent>
       </Dialog>
       
-      {/* New Target Dialog */}
+      {/* New/Edit Target Dialog */}
       <Dialog open={isTargetDialogOpen} onOpenChange={setIsTargetDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Yeni Hədəf Təyin Et</DialogTitle>
+            <DialogTitle>{editingTarget ? 'Hədəfi Redaktə Et' : 'Yeni Hədəf Təyin Et'}</DialogTitle>
             <DialogDescription>
-              Xəritədə seçdiyiniz nöqtəyə ad verin, status təyin edin və onu bir bölüyə təyin edin.
+              {editingTarget ? 'Hədəfin məlumatlarını yeniləyin.' : 'Xəritədə seçdiyiniz nöqtəyə ad verin, status təyin edin və onu bir bölüyə təyin edin.'}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -404,10 +483,12 @@ export default function MapPlaceholder() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsTargetDialogOpen(false)}>Ləğv Et</Button>
-            <Button onClick={handleCreateTarget}>Təyin Et</Button>
+            <Button onClick={handleSaveTarget}>{editingTarget ? 'Yenilə' : 'Təyin Et'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
   );
 }
+
+    
