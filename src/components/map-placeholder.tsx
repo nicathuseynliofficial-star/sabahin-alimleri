@@ -234,10 +234,12 @@ export default function MapPlaceholder() {
       <div className="flex-shrink-0 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Əməliyyat Xəritəsi</h1>
         <div className="flex items-center gap-6">
-          <Button variant="outline" size="sm" onClick={() => setIsMapImportOpen(true)}>
-            <Upload className="mr-2 h-4 w-4" />
-            Xəritəni Dəyişdir
-          </Button>
+          {isCommander && (
+            <Button variant="outline" size="sm" onClick={() => setIsMapImportOpen(true)}>
+              <Upload className="mr-2 h-4 w-4" />
+              Xəritəni Dəyişdir
+            </Button>
+          )}
           <div className="flex items-center space-x-2">
             <Switch id="secure-mode" checked={secureMode} onCheckedChange={setSecureMode} />
             <Label htmlFor="secure-mode" className="text-accent font-medium">
