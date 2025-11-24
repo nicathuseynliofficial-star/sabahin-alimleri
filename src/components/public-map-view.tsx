@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { db } from '@/lib/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { useFirebase, useDoc, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
@@ -10,41 +10,16 @@ import type { Decoy } from '@/lib/types';
 import { Skeleton } from './ui/skeleton';
 
 export default function PublicMapView() {
-  const [decoy, setDecoy] = useState<Decoy | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { firestore } = useFirebase();
+  
+  const latestDecoyDocRef = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return doc(firestore, 'decoys', 'latest');
+  }, [firestore]);
 
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'decoys', 'latest'), (doc) => {
-      if (doc.exists()) {
-        setDecoy(doc.data() as Decoy);
-      } else {
-        setDecoy(null);
-      }
-      setLoading(false);
-    }, (error) => {
-        console.error("Error fetching decoy:", error);
-        setLoading(false);
-    });
-
-    return () => unsub();
-  }, []);
+  const { data: decoy, isLoading } = useDoc<Decoy>(latestDecoyDocRef);
 
   const mapImage = PlaceHolderImages.find((img) => img.id === 'azerbaijan-map');
-
-  // Dummy position for decoy on the map.
-  // In a real app, this would be calculated based on lat/lng relative to map bounds.
-  const [decoyPosition, setDecoyPosition] = useState({ top: '0%', left: '0%' });
-
-  useEffect(() => {
-    if (decoy) {
-        // Create a pseudo-random but consistent position based on coords
-        const lat = decoy.location.lat || 40.4093;
-        const lng = decoy.location.lng || 49.8671;
-        const top = (Math.abs(Math.sin(lat) * 100)) % 70 + 15; // 15-85%
-        const left = (Math.abs(Math.sin(lng) * 100)) % 80 + 10; // 10-90%
-        setDecoyPosition({ top: `${top}%`, left: `${left}%` });
-    }
-  }, [decoy]);
 
   return (
     <Card className="w-full bg-card border-border shadow-2xl shadow-primary/10">
@@ -79,7 +54,7 @@ export default function PublicMapView() {
             </div>
           )}
 
-          {loading ? (
+          {isLoading ? (
              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                 <div className="text-center space-y-4">
                     <p className="text-white">Məlumatlar yoxlanılır...</p>
@@ -93,8 +68,8 @@ export default function PublicMapView() {
           ) : (
             <div
               className="absolute transition-all duration-1000"
-              style={{ top: decoyPosition.top, left: decoyPosition.left, transform: 'translate(-50%, -50%)' }}
-              title={`Yem mövqeyi: ${decoy.reasoning.substring(0, 100)}...`}
+              style={{ top: `${decoy.latitude}%`, left: `${decoy.longitude}%`, transform: 'translate(-50%, -50%)' }}
+              title={`Yem mövqeyi: ${decoy.reasoning ? decoy.reasoning.substring(0, 100) : ''}...`}
             >
               <div className="relative w-6 h-6">
                 <div className="absolute inset-0 bg-red-600 rounded-full pulse-anim"></div>

@@ -52,7 +52,7 @@ const prompt = ai.definePrompt({
   name: 'generateStrategicDecoysPrompt',
   input: {schema: GenerateStrategicDecoysInputSchema},
   output: {schema: GenerateStrategicDecoysOutputSchema},
-  prompt: `You are a military strategist tasked with generating realistic decoy coordinates to divert enemy attention.
+  prompt: `You are a military strategist tasked with generating a single, realistic decoy coordinate to divert enemy attention.
 
   Given an actual military objective with the following characteristics:
   - Latitude: {{latitude}}
@@ -61,17 +61,19 @@ const prompt = ai.definePrompt({
   - Proximity to Populated Areas: {{proximityToPopulatedAreas}}
   - Known Enemy Patrol Routes: {{knownEnemyPatrolRoutes}}
 
-  Generate a decoy coordinate within a radius of {{radiusKm}} kilometers that would plausibly attract enemy attention, effectively diverting resources and misdirecting their strategic focus.
+  Your task is to generate ONE plausible decoy coordinate. This decoy must be within a {{radiusKm}} kilometer radius of the actual objective. It should be a location that would believably attract enemy attention.
 
-  Consider factors such as:
-  - Terrain: The decoy should be placed in terrain that is accessible and strategically relevant.
-  - Proximity to Populated Areas: The decoy should be close enough to populated areas to seem like a potential target but not so close that it would cause immediate civilian casualties.
-  - Enemy Patrol Routes: The decoy should be placed along or near known enemy patrol routes to increase the likelihood of detection.
+  CRITICAL: The decoy's coordinates (latitude and longitude) MUST be a plausible offset from the original objective's coordinates, staying within the specified {{radiusKm}} radius. Do NOT generate coordinates on the opposite side of the planet. A small, realistic deviation is required. For example, add or subtract a small decimal value (e.g., 0.01 to 0.09) to the original latitude and longitude.
 
-  The decoy location should be likely to be visited or checked out based on the location properties.
+  Consider these factors for placement:
+  - Terrain: The decoy should be in accessible and strategically relevant terrain.
+  - Proximity to Populated Areas: Place it near enough to populated areas to seem like a real target, but not so close as to cause immediate civilian casualties.
+  - Enemy Patrol Routes: The decoy should be near known enemy patrol routes to increase detection likelihood.
+
+  The decoy location should be a place an enemy would likely investigate.
   Explain your reasoning for choosing this particular location.
 
-  Output the latitude, longitude, and reasoning.`,
+  Output the decoy's latitude, longitude, and your reasoning.`,
 });
 
 const generateStrategicDecoysFlow = ai.defineFlow(

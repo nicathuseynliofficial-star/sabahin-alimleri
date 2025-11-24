@@ -25,7 +25,7 @@ export interface OperationTarget {
   assignedUnitId: string;
   latitude: number; // This will store the Y percentage
   longitude: number; // This will store the X percentage
-  status: 'pending' | 'active' | 'completed';
+  status: 'pending' | 'active' | 'passive';
   mapId: string; // To associate target with a specific map
 }
 

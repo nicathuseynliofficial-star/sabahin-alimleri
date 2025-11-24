@@ -7,17 +7,17 @@ import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Label } from './ui/label';
 import { Switch } from './ui/switch';
-import { Map, Shield, Target, Upload } from 'lucide-react';
+import { Map, Shield, Target, Upload, Dot } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth-provider';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
-import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
-import { collection, query, where } from 'firebase/firestore';
-import type { MilitaryUnit, OperationTarget } from '@/lib/types';
+import { useFirebase, useCollection, useMemoFirebase, useDoc } from '@/firebase';
+import { addDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { collection, query, where, doc } from 'firebase/firestore';
+import type { MilitaryUnit, OperationTarget, Decoy } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 import { useToast } from '@/hooks/use-toast';
 import { generateStrategicDecoys, type GenerateStrategicDecoysInput } from '@/ai/flows/generate-strategic-decoys';
@@ -48,10 +48,18 @@ export default function MapPlaceholder() {
   const [targetCoordinates, setTargetCoordinates] = useState<ClickCoordinates>(null);
   const [targetName, setTargetName] = useState('');
   const [assignedUnitId, setAssignedUnitId] = useState('');
+  const [targetStatus, setTargetStatus] = useState<OperationTarget['status']>('pending');
   
   // State for decoy generation
   const [isEncrypting, setIsEncrypting] = useState(false);
   const [selectedTargetForDecoy, setSelectedTargetForDecoy] = useState<OperationTarget | null>(null);
+
+  // Listen to the 'latest' decoy document
+  const latestDecoyDocRef = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return doc(firestore, 'decoys', 'latest');
+  }, [firestore]);
+  const { data: latestDecoy, isLoading: isLoadingDecoy } = useDoc<Decoy>(latestDecoyDocRef);
 
 
   // Base query for units
@@ -161,7 +169,7 @@ export default function MapPlaceholder() {
          toast({
             variant: "destructive",
             title: "Xəta",
-            description: "Hədəf adı və bölük seçilməlidir.",
+            description: "Hədəf adı, status və bölük seçilməlidir.",
         });
         return;
     }
@@ -171,7 +179,7 @@ export default function MapPlaceholder() {
         assignedUnitId: assignedUnitId,
         latitude: targetCoordinates.y,
         longitude: targetCoordinates.x,
-        status: 'pending',
+        status: targetStatus,
         mapId: mapMode,
     };
     
@@ -190,9 +198,10 @@ export default function MapPlaceholder() {
     setTargetName('');
     setAssignedUnitId('');
     setTargetCoordinates(null);
+    setTargetStatus('pending');
   };
   
-    const handleEncryptTarget = async (target: OperationTarget) => {
+  const handleEncryptTarget = async (target: OperationTarget) => {
     if (!firestore) return;
     setSelectedTargetForDecoy(target);
     setIsEncrypting(true);
@@ -210,6 +219,7 @@ export default function MapPlaceholder() {
         const decoyResult = await generateStrategicDecoys(decoyInput);
 
         const newDecoy = {
+            id: 'latest', // Static ID for the document
             latitude: decoyResult.decoyLatitude,
             longitude: decoyResult.decoyLongitude,
             reasoning: decoyResult.reasoning,
@@ -217,14 +227,12 @@ export default function MapPlaceholder() {
             timestamp: new Date()
         };
 
-        const decoysCollection = collection(firestore, 'decoys');
-        // Setting a specific document ID for the public view to listen to
-        const latestDecoyDoc = doc(decoysCollection, 'latest');
-        setDocumentNonBlocking(latestDecoyDoc, newDecoy, { merge: false });
+        const decoyDocRef = doc(firestore, 'decoys', 'latest');
+        setDocumentNonBlocking(decoyDocRef, newDecoy, { merge: false });
 
         toast({
             title: 'Şifrələmə Uğurlu Oldu',
-            description: `Yeni yem koordinatı yaradıldı və ictimai yayıma göndərildi.`,
+            description: `Yeni yem koordinatı yaradıldı və yayıma göndərildi.`,
         });
     } catch (error) {
         console.error('Error generating decoy:', error);
@@ -309,6 +317,7 @@ export default function MapPlaceholder() {
                     <TooltipContent>
                         <p>Hədəf: {target.name}</p>
                         <p className='text-muted-foreground'>Bölük: {units?.find(u => u.id === target.assignedUnitId)?.name ?? 'Naməlum'}</p>
+                         <p className='text-muted-foreground capitalize'>Status: {target.status}</p>
                         {isCommander && (
                         <Button 
                             size="sm" 
@@ -322,6 +331,23 @@ export default function MapPlaceholder() {
                     </TooltipContent>
                 </Tooltip>
               ))}
+               {/* Render Latest Decoy */}
+              {latestDecoy && (
+                 <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="absolute" style={{ top: `${latestDecoy.latitude}%`, left: `${latestDecoy.longitude}%`, transform: 'translate(-50%, -50%)' }}>
+                        <div className="relative w-6 h-6">
+                            <div className="absolute inset-0 bg-red-600 rounded-full pulse-anim"></div>
+                            <div className="absolute inset-1 bg-red-400 rounded-full"></div>
+                        </div>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p className='font-bold text-red-400'>Yem Hədəf (Decoy)</p>
+                        <p className='text-muted-foreground max-w-xs'>Səbəb: {latestDecoy.reasoning}</p>
+                    </TooltipContent>
+                </Tooltip>
+              )}
             </div>
           </TooltipProvider>
         </CardContent>
@@ -358,7 +384,7 @@ export default function MapPlaceholder() {
           <DialogHeader>
             <DialogTitle>Yeni Hədəf Təyin Et</DialogTitle>
             <DialogDescription>
-              Xəritədə seçdiyiniz nöqtəyə ad verin və onu bir bölüyə təyin edin.
+              Xəritədə seçdiyiniz nöqtəyə ad verin, status təyin edin və onu bir bölüyə təyin edin.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -373,6 +399,21 @@ export default function MapPlaceholder() {
                 className="col-span-3"
                 placeholder="Məs. Alfa Nöqtəsi"
               />
+            </div>
+             <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="target-status" className="text-right">
+                Status
+              </Label>
+              <Select onValueChange={(v) => setTargetStatus(v as OperationTarget['status'])} value={targetStatus}>
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Status seçin..." />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="pending">Gözləmədə</SelectItem>
+                    <SelectItem value="active">Aktiv</SelectItem>
+                    <SelectItem value="passive">Passiv</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="unit-select" className="text-right">
