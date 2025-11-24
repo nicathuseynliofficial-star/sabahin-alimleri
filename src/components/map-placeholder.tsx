@@ -200,27 +200,7 @@ export default function MapPlaceholder({
     const lat4 = interpolate(originalLat, decoyLat, 0.8).toFixed(4);
     const lng4 = interpolate(originalLng, decoyLng, 0.8).toFixed(4);
 
-    return `1. Collatz Qarışdırması
-→ İlkin koordinat emal edilir...
-→ Nəticə: ${lat1}, ${lng1}
-
-2. Prime-Jump Şifrələməsi
-→ Sadə ədəd cədvəli tətbiq edilir...
-→ Nəticə: ${lat2}, ${lng2}
-
-3. Fibonaççi Spiralı
-→ Spiral ofset tətbiq edilir...
-→ Nəticə: ${lat3}, ${lng3}
-
-4. Lehmer RNG Sürüşdürməsi
-→ Təsadüfi sürüşdürmə tətbiq edilir...
-→ Nəticə: ${lat4}, ${lng4}
-
-5. Kvant Geo-Sürüşdürmə
-→ Yekun təhlükəsizlik layı tətbiq edildi.
-→ Yem koordinatı: ${decoyLat.toFixed(4)}, ${decoyLng.toFixed(4)}
-
-[SİSTEM] Proses tamamlandı. Yem yayıma hazırdır.`;
+    return `[SİSTEM] Proses tamamlandı. Yem yayıma hazırdır.`;
   };
 
 
@@ -263,8 +243,8 @@ export default function MapPlaceholder({
             const decoyResult = await generateStrategicDecoys(decoyInput);
             
             const publicNames = ["Alfa", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"];
-            const reasoningText = generateReasoningText(target.latitude, target.longitude, decoyResult.decoyLatitude, decoyResult.decoyLongitude);
-            
+            const reasoningText = `[SİSTEM] Proses tamamlandı. Yem yayıma hazırdır.`;
+
             const newDecoy: Decoy = {
                 id: uuidv4(),
                 publicName: `Bölük ${publicNames[index % publicNames.length]}`,
@@ -422,20 +402,6 @@ export default function MapPlaceholder({
                 className="object-cover"
                 unoptimized
               />
-              {/* Render Units */}
-              {units?.map((unit) => (
-                <Tooltip key={unit.id}>
-                  <TooltipTrigger asChild>
-                    <div className="absolute" style={{ top: `${unit.latitude}%`, left: `${unit.longitude}%` }} data-interactive>
-                      <Shield className="w-8 h-8 text-white fill-blue-500/50 stroke-2" />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Bölük: {unit.name}</p>
-                    <p className='text-muted-foreground'>Status: {unit.status}</p>
-                  </TooltipContent>
-                </Tooltip>
-              ))}
               {/* Render Targets */}
               {targets?.map((target) => (
                  <div key={target.id} className="absolute" style={{ top: `${target.latitude}%`, left: `${target.longitude}%` }} data-interactive>
@@ -483,7 +449,7 @@ export default function MapPlaceholder({
                         {isCommander && (
                           <div className='mt-2 pt-2 border-t border-border'>
                               <p className='font-semibold text-sm mb-1'>Şifrələnmə Jurnalı:</p>
-                              <div className='text-muted-foreground'>{decoy.reasoning}</div>
+                              <div className='text-muted-foreground'>[SİSTEM] Proses tamamlandı. Yem yayıma hazırdır.</div>
                           </div>
                         )}
                     </TooltipContent>
