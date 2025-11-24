@@ -164,8 +164,7 @@ export default function MapPlaceholder() {
           mapId: SINGLE_MAP_ID,
       };
       
-      const targetsCollection = collection(firestore, 'operation_targets');
-      const targetDocRef = doc(targetsCollection, newTarget.id);
+      const targetDocRef = doc(firestore, 'operation_targets', newTarget.id);
       setDocumentNonBlocking(targetDocRef, newTarget);
 
       toast({
@@ -532,5 +531,3 @@ export default function MapPlaceholder() {
     </div>
   );
 }
-
-    
