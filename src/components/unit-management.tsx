@@ -58,14 +58,29 @@ export default function UnitManagement({ isOpen, onOpenChange }: UnitManagementP
     try {
       // Check for uniqueness of the unit name
       const unitsRef = collection(firestore, 'military_units');
-      const q = query(unitsRef, where('name', '==', unitName));
-      const querySnapshot = await getDocs(q);
+      const unitQuery = query(unitsRef, where('name', '==', unitName));
+      const unitQuerySnapshot = await getDocs(unitQuery);
 
-      if (!querySnapshot.empty) {
+      if (!unitQuerySnapshot.empty) {
         toast({
           variant: "destructive",
           title: "Xəta",
           description: `"${unitName}" adlı bölük artıq mövcuddur. Fərqli ad seçin.`,
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Check for uniqueness of the commander username
+      const usersRef = collection(firestore, 'users');
+      const userQuery = query(usersRef, where('username', '==', commanderUsername));
+      const userQuerySnapshot = await getDocs(userQuery);
+
+      if (!userQuerySnapshot.empty) {
+        toast({
+          variant: "destructive",
+          title: "Xəta",
+          description: `"${commanderUsername}" adlı komandir adı artıq mövcuddur. Fərqli ad seçin.`,
         });
         setLoading(false);
         return;
