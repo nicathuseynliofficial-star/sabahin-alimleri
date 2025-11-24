@@ -13,18 +13,76 @@ import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
 import { Input } from './ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
+import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { collection, query, where } from 'firebase/firestore';
+import type { MilitaryUnit, OperationTarget } from '@/lib/types';
+import { v4 as uuidv4 } from 'uuid';
+import { useToast } from '@/hooks/use-toast';
+
 
 type MapMode = 'azerbaijan' | 'karabakh' | 'custom';
+
+type ClickCoordinates = {
+    x: number;
+    y: number;
+} | null;
+
 
 export default function MapPlaceholder() {
   const [mapMode, setMapMode] = useState<MapMode>('azerbaijan');
   const [secureMode, setSecureMode] = useState(true);
   const { user } = useAuth();
+  const { firestore } = useFirebase();
+  const { toast } = useToast();
   const isCommander = user?.role === 'commander';
   
   const [customMapUrl, setCustomMapUrl] = useState('');
   const [tempCustomMapUrl, setTempCustomMapUrl] = useState('');
   const [isMapImportOpen, setIsMapImportOpen] = useState(false);
+
+  // State for the new target dialog
+  const [isTargetDialogOpen, setIsTargetDialogOpen] = useState(false);
+  const [targetCoordinates, setTargetCoordinates] = useState<ClickCoordinates>(null);
+  const [targetName, setTargetName] = useState('');
+  const [assignedUnitId, setAssignedUnitId] = useState('');
+
+
+  // Fetch units and targets from Firestore
+  const unitsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    if (user.role === 'commander') {
+      return collection(firestore, 'military_units');
+    }
+    // Sub-commanders see all if they have the perm, else only their own.
+    if (user.canSeeAllUnits) {
+       return collection(firestore, 'military_units');
+    }
+    if (user.assignedUnitId) {
+        return query(collection(firestore, 'military_units'), where('id', '==', user.assignedUnitId));
+    }
+    return null;
+  }, [firestore, user]);
+  const { data: units, isLoading: isLoadingUnits } = useCollection<MilitaryUnit>(unitsQuery);
+
+  const targetsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+     if (user.role === 'commander') {
+      return collection(firestore, 'operation_targets');
+    }
+     // Sub-commanders see all targets if they can see all units
+    if (user.canSeeAllUnits) {
+       return collection(firestore, 'operation_targets');
+    }
+    // Otherwise, they see targets assigned to their unit
+    if (user.assignedUnitId) {
+        return query(collection(firestore, 'operation_targets'), where('assignedUnitId', '==', user.assignedUnitId));
+    }
+    return null;
+  }, [firestore, user]);
+  const { data: targets, isLoading: isLoadingTargets } = useCollection<OperationTarget>(targetsQuery);
+
 
   useEffect(() => {
     const storedMapUrl = localStorage.getItem('customMapUrl');
@@ -72,24 +130,53 @@ export default function MapPlaceholder() {
   }
 
 
-  // Placeholder data for units and targets
-  const [units, setUnits] = useState([
-    { id: 'unit1', name: 'Qartal', location: { top: '30%', left: '40%' } },
-    { id: 'unit2', name: 'Şahin', location: { top: '60%', left: '70%' } },
-  ]);
-  const [targets, setTargets] = useState([
-    { id: 'target1', name: 'Hədəf Alfa', location: { top: '50%', left: '50%' }, assignedUnitId: 'unit1' },
-  ]);
-
   const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isCommander) return;
-    // In a real app, open a dialog here to create a new target.
+    
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
-    console.log(`Commander clicked at ${x.toFixed(2)}%, ${y.toFixed(2)}%`);
-    // Example: setDialogState({ open: true, location: { lat: ..., lng: ... }})
+    
+    setTargetCoordinates({ x, y });
+    setIsTargetDialogOpen(true);
   };
+
+  const handleCreateTarget = () => {
+    if (!targetName || !assignedUnitId || !targetCoordinates || !firestore) {
+         toast({
+            variant: "destructive",
+            title: "Xəta",
+            description: "Hədəf adı və bölük seçilməlidir.",
+        });
+        return;
+    }
+
+    const newTarget: OperationTarget = {
+        id: uuidv4(),
+        name: targetName,
+        assignedUnitId: assignedUnitId,
+        location: {
+            lat: targetCoordinates.y, // Using percentage as lat/lng for placeholder
+            lng: targetCoordinates.x,
+        },
+        status: 'pending'
+    };
+
+    const targetsCollection = collection(firestore, 'operation_targets');
+    addDocumentNonBlocking(targetsCollection, newTarget);
+
+    toast({
+        title: "Hədəf Yaradıldı",
+        description: `"${targetName}" adlı yeni hədəf yaradıldı və "${units?.find(u => u.id === assignedUnitId)?.name}" bölüyünə təyin edildi.`
+    });
+
+    // Reset and close dialog
+    setIsTargetDialogOpen(false);
+    setTargetName('');
+    setAssignedUnitId('');
+    setTargetCoordinates(null);
+  };
+
 
   return (
     <div className="h-screen w-full flex flex-col p-4 gap-4">
@@ -136,24 +223,24 @@ export default function MapPlaceholder() {
                 unoptimized={mapMode === 'custom'}
               />
               {/* Render Units */}
-              {units.map((unit) => (
+              {units?.map((unit) => (
                 <Tooltip key={unit.id}>
                   <TooltipTrigger asChild>
-                    <div className="absolute" style={{ top: unit.location.top, left: unit.location.left }}>
+                    <div className="absolute" style={{ top: `${unit.location.lat}%`, left: `${unit.location.lng}%` }}>
                       <Shield className="w-8 h-8 text-white fill-blue-500/50 stroke-2" />
                     </div>
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>Bölük: {unit.name}</p>
-                    <p className='text-muted-foreground'>Status: {secureMode ? 'Əməliyyatda' : 'Encrypted ••••'}</p>
+                    <p className='text-muted-foreground'>Status: {unit.status}</p>
                   </TooltipContent>
                 </Tooltip>
               ))}
               {/* Render Targets */}
-              {targets.map((target) => (
+              {targets?.map((target) => (
                 <Tooltip key={target.id}>
                   <TooltipTrigger asChild>
-                    <div className="absolute" style={{ top: target.location.top, left: target.location.left }}>
+                    <div className="absolute" style={{ top: `${target.location.lat}%`, left: `${target.location.lng}%` }}>
                       <Target className={`w-8 h-8 animate-pulse ${
                           isCommander ? 'text-blue-400' : 'text-green-400'
                         }`} />
@@ -161,7 +248,7 @@ export default function MapPlaceholder() {
                   </TooltipTrigger>
                   <TooltipContent>
                      <p>Hədəf: {target.name}</p>
-                    <p className='text-muted-foreground'>Bölük: {units.find(u => u.id === target.assignedUnitId)?.name}</p>
+                    <p className='text-muted-foreground'>Bölük: {units?.find(u => u.id === target.assignedUnitId)?.name}</p>
                      {isCommander && <Button size="sm" className="mt-2 w-full bg-accent text-accent-foreground">Hədəfi Şifrələ</Button>}
                   </TooltipContent>
                 </Tooltip>
@@ -170,6 +257,8 @@ export default function MapPlaceholder() {
           </TooltipProvider>
         </CardContent>
       </Card>
+      
+      {/* Map Import Dialog */}
       <Dialog open={isMapImportOpen} onOpenChange={setIsMapImportOpen}>
         <DialogContent>
             <DialogHeader>
@@ -191,6 +280,57 @@ export default function MapPlaceholder() {
                 <Button variant="outline" onClick={() => setIsMapImportOpen(false)}>Ləğv et</Button>
                 <Button onClick={handleSaveCustomMap}>Yadda Saxla</Button>
             </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* New Target Dialog */}
+      <Dialog open={isTargetDialogOpen} onOpenChange={setIsTargetDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Yeni Hədəf Təyin Et</DialogTitle>
+            <DialogDescription>
+              Xəritədə seçdiyiniz nöqtəyə ad verin və onu bir bölüyə təyin edin.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="target-name" className="text-right">
+                Hədəf Adı
+              </Label>
+              <Input
+                id="target-name"
+                value={targetName}
+                onChange={(e) => setTargetName(e.target.value)}
+                className="col-span-3"
+                placeholder="Məs. Alfa Nöqtəsi"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="unit-select" className="text-right">
+                Bölük Seçin
+              </Label>
+              <Select onValueChange={setAssignedUnitId} value={assignedUnitId}>
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Təyin olunacaq bölüyü seçin..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {isLoadingUnits ? (
+                    <SelectItem value="loading" disabled>Yüklənir...</SelectItem>
+                  ) : (
+                    units?.map((unit) => (
+                      <SelectItem key={unit.id} value={unit.id}>
+                        {unit.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsTargetDialogOpen(false)}>Ləğv Et</Button>
+            <Button onClick={handleCreateTarget}>Təyin Et</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -12,7 +12,7 @@ export interface UserProfile {
 export interface MilitaryUnit {
   id: string;
   name: string;
-  commanderId: string; // Changed from commanderUsername to ID for better relation
+  commanderId: string;
   status: 'operating' | 'offline' | 'alert';
   location: {
     lat: number;
@@ -20,18 +20,17 @@ export interface MilitaryUnit {
   };
 }
 
-export interface MapObject {
+export interface OperationTarget {
   id: string;
   name: string;
-  location: {
-    lat: number;
-    lng: number;
-  };
   assignedUnitId: string;
-  terrainType: string;
-  proximityToPopulatedAreas: 'high' | 'medium' | 'low';
-  knownEnemyPatrolRoutes: string;
+  location: {
+    lat: number; // This will store the Y percentage
+    lng: number; // This will store the X percentage
+  };
+  status: 'pending' | 'active' | 'completed';
 }
+
 
 export interface Decoy {
   id: string;
