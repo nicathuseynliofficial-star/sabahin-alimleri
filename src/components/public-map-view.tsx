@@ -66,7 +66,7 @@ export default function PublicMapView() {
               </div>
             ) : !decoys || decoys.length === 0 ? (
               <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                  <p className="text-white">Hal-hazırda aktiv yem mövqeyi yoxdur.</p>
+                  <p className="text-white">Hal-hazırda izlənilən mövqe yoxdur.</p>
               </div>
             ) : (
               decoys.map((decoy) => (
