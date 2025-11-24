@@ -221,7 +221,7 @@ export default function MapPlaceholder() {
             const decoyResult = await generateStrategicDecoys(decoyInput);
             
             const publicNames = ["Alfa", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"];
-            const newDecoy = {
+            const newDecoy: Omit<Decoy, 'id' | 'timestamp'> & { id: string, timestamp: Date } = {
                 id: uuidv4(),
                 publicName: `Bölük ${publicNames[index % publicNames.length]}`,
                 latitude: decoyResult.decoyLatitude,
@@ -303,10 +303,6 @@ export default function MapPlaceholder() {
         break;
     }
     
-    if (isCommander || (user?.role === 'sub-commander' && user.canSeeAllUnits)) {
-        return `${colorClass} animate-pulse`;
-    }
-    
     return colorClass;
   };
 
@@ -363,7 +359,7 @@ export default function MapPlaceholder() {
                             <Target className={`w-8 h-8 ${getTargetClasses(target)}`} />
                         </div>
                     </TooltipTrigger>
-                    <TooltipContent className="p-0">
+                    <TooltipContent className="p-0" data-interactive>
                       <div className='p-2'>
                         <p>Hədəf: {target.name}</p>
                         <p className='text-muted-foreground'>Bölük: {units?.find(u => u.id === target.assignedUnitId)?.name ?? 'Naməlum'}</p>
@@ -393,7 +389,7 @@ export default function MapPlaceholder() {
                         </div>
                       </div>
                     </TooltipTrigger>
-                    <TooltipContent>
+                    <TooltipContent data-interactive>
                         <p className='font-bold text-red-400'>Yem Hədəf (Decoy)</p>
                         <p className='text-muted-foreground'>Ad: {decoy.publicName}</p>
                         {isCommander && <p className='text-muted-foreground max-w-xs'>Səbəb: {decoy.reasoning}</p>}
