@@ -1,0 +1,175 @@
+/**
+ * This Firestore Security Ruleset is designed for the GeoShield application, a
+ * real-time military unit tracking and operations management system.
+ *
+ * Core Philosophy:
+ * The security model implements a Role-Based Access Control (RBAC) system
+ * without relying on custom claims. A user's permissions are derived directly
+ * from their user document stored in the `/users/{userId}` collection. This
+ * document contains their role ('commander' or 'sub-commander') and unit
+ * assignments, which dictates their access to sensitive military data. Publicly
+ * accessible data is explicitly segregated into its own collection.
+ *
+ * Data Structure:
+ * The data is organized into four distinct, top-level collections:
+ * - `/users/{userId}`: Stores user profile information, including authorization roles.
+ * - `/military_units/{militaryUnitId}`: Contains sensitive data about military units.
+ * - `/operation_targets/{operationTargetId}`: Holds details about operational targets.
+ * - `/decoys/{decoyId}`: A public collection of decoy coordinates.
+ *
+ * Key Security Decisions:
+ * - Commander Privilege: Users with the 'commander' role have broad read and write
+ *   access across `military_units` and `operation_targets`.
+ * - Sub-Commander Access: Sub-commanders have restricted access. Their ability to
+ *   view data is determined by the `canSeeAllUnits` flag or their specific
+ *   `assignedUnitId` in their user profile.
+ * - Default Deny: All operations are denied by default. Access must be
+ *   explicitly granted.
+ * - No User Enumeration: Listing users is explicitly disallowed to protect user privacy.
+ * - Public Data Segregation: Decoy data, which is meant to be public, is stored in a
+ *   separate `/decoys` collection with open read access, while all writes are
+ *   denied from the client. This is more secure and performant than mixing public
+ *   and private data.
+ *
+ * Denormalization for Authorization:
+ * To enable fast and secure authorization checks, key data is denormalized:
+ * - User permissions (role, canSeeAllUnits, assignedUnitId) are stored directly on the
+ *   `/users/{userId}` document. Rules use `get()` to fetch the requesting user's
+ *   profile to make authorization decisions, avoiding complex queries or joins.
+ * - The `assignedUnitId` is denormalized onto `/operation_targets` documents, allowing
+ *   rules to authorize sub-commander access without needing to reference the parent
+ *   `military_unit` document.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------------------
+    // Helper Functions
+    // ------------------------------------------------------------------------
+
+    /**
+     * Returns true if the user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Returns true if the authenticated user's UID matches the provided userId.
+     * This is the foundation of the ownership-based security model.
+     * @param userId The user ID to check against the authenticated user.
+     */
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    /**
+     * Retrieves the authenticated user's data document from the /users collection.
+     * This is the source of truth for role-based access control.
+     */
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    /**
+     * Checks if the authenticated user has the 'commander' role.
+     */
+    function isCommander() {
+      return isSignedIn() && getUserData().role == 'commander';
+    }
+
+    /**
+     * Checks if the authenticated user has the 'canSeeAllUnits' permission flag.
+     */
+    function canSeeAllUnits() {
+      return isSignedIn() && getUserData().canSeeAllUnits == true;
+    }
+
+    /**
+     * Checks if the authenticated user is assigned to a specific military unit.
+     * @param unitId The unit ID to check against the user's assignment.
+     */
+    function isAssignedToUnit(unitId) {
+      return isSignedIn() && getUserData().assignedUnitId == unitId;
+    }
+
+    // ------------------------------------------------------------------------
+    // Collection Rules
+    // ------------------------------------------------------------------------
+
+    /**
+     * @description Controls access to military unit documents. Commanders can manage
+     *              and see all units. Sub-commanders can see all units if granted
+     *              the `canSeeAllUnits` permission, or otherwise can only see the
+     *              specific unit they are assigned to.
+     * @path /military_units/{militaryUnitId}
+     * @allow (get) A sub-commander getting the specific unit they are assigned to.
+     * @deny (list) A sub-commander without the `canSeeAllUnits` flag trying to list all units.
+     * @deny (create) A sub-commander trying to create a new military unit.
+     * @principle Enforces role-based access control (RBAC) using data from the user's profile.
+     */
+    match /military_units/{militaryUnitId} {
+      allow get: if isSignedIn() && (isCommander() || canSeeAllUnits() || isAssignedToUnit(militaryUnitId));
+      allow list: if isSignedIn() && (isCommander() || canSeeAllUnits());
+      allow create: if isCommander();
+      allow update: if isCommander() && resource != null;
+      allow delete: if isCommander() && resource != null;
+    }
+
+    /**
+     * @description Secures operation target documents. Commanders have full control.
+     *              Sub-commanders can only view targets assigned to their own unit.
+     *              Listing all targets is a commander-only privilege to prevent data leakage.
+     * @path /operation_targets/{operationTargetId}
+     * @allow (get) A sub-commander reading a target assigned to their unit.
+     * @deny (list) A sub-commander trying to list all operation targets in the system.
+     * @deny (update) A sub-commander trying to modify a target, even one assigned to their unit.
+     * @principle Uses denormalized `assignedUnitId` for efficient and secure read authorization. Restricts list operations to privileged roles.
+     */
+    match /operation_targets/{operationTargetId} {
+      allow get: if isSignedIn() && (isCommander() || isAssignedToUnit(resource.data.assignedUnitId));
+      allow list: if isCommander();
+      allow create: if isCommander();
+      allow update: if isCommander() && resource != null;
+      allow delete: if isCommander() && resource != null;
+    }
+
+    /**
+     * @description Manages decoy coordinates. This data is intended for public consumption
+     *              and is therefore readable by anyone, including unauthenticated users.
+     *              All client-side write operations are forbidden, assuming decoys are
+     *              managed by a secure backend service.
+     * @path /decoys/{decoyId}
+     * @allow (get, list) An unauthenticated public client reading decoy data.
+     * @deny (create, update, delete) Any authenticated user trying to modify decoy data from the client.
+     * @principle Segregates public read-only data from secure private data to simplify rules and improve security.
+     */
+    match /decoys/{decoyId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    /**
+     * @description Defines rules for user profile documents. Users can create, read, and
+     *              update their own document. Access to other users' documents is denied
+     *              to prevent user enumeration.
+     * @path /users/{userId}
+     * @allow (create) A new user creating their own user document upon signup.
+     * @allow (update) An authenticated user updating their own profile information.
+     * @deny (get) A user trying to read another user's profile.
+     * @deny (list) Any user trying to get a list of all users in the system.
+     * @principle Enforces strict document ownership and prevents user data enumeration. Validates relational integrity on create and update.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isOwner(userId) && resource != null && request.resource.data.id == resource.data.id;
+      allow delete: if isOwner(userId) && resource != null;
+    }
+  }
+}

@@ -1,0 +1,212 @@
+{
+  "entities": {
+    "MilitaryUnit": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "MilitaryUnit",
+      "type": "object",
+      "description": "Represents a military unit within the GeoShield system.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the military unit."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the military unit."
+        },
+        "status": {
+          "type": "string",
+          "description": "The current operational status of the unit (e.g., 'operational', 'offline', 'alert')."
+        },
+        "latitude": {
+          "type": "number",
+          "description": "The current latitude coordinate of the unit's location."
+        },
+        "longitude": {
+          "type": "number",
+          "description": "The current longitude coordinate of the unit's location."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "status",
+        "latitude",
+        "longitude"
+      ]
+    },
+    "OperationTarget": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "OperationTarget",
+      "type": "object",
+      "description": "Represents an operation target assigned to a military unit.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the operation target."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the operation target."
+        },
+        "latitude": {
+          "type": "number",
+          "description": "The latitude coordinate of the operation target's location."
+        },
+        "longitude": {
+          "type": "number",
+          "description": "The longitude coordinate of the operation target's location."
+        },
+        "assignedUnitId": {
+          "type": "string",
+          "description": "Reference to MilitaryUnit. The ID of the military unit assigned to this target. (Relationship: MilitaryUnit 1:N OperationTarget)"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "latitude",
+        "longitude",
+        "assignedUnitId"
+      ]
+    },
+    "Decoy": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Decoy",
+      "type": "object",
+      "description": "Represents a decoy coordinate displayed on the public feed.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the decoy."
+        },
+        "latitude": {
+          "type": "number",
+          "description": "The latitude coordinate of the decoy's location."
+        },
+        "longitude": {
+          "type": "number",
+          "description": "The longitude coordinate of the decoy's location."
+        },
+        "operationTargetId": {
+          "type": "string",
+          "description": "Reference to OperationTarget. The ID of the operation target this decoy is associated with. (Relationship: OperationTarget 1:1 Decoy)"
+        }
+      },
+      "required": [
+        "id",
+        "latitude",
+        "longitude",
+        "operationTargetId"
+      ]
+    },
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user (commander or sub-commander) of the system.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the user."
+        },
+        "username": {
+          "type": "string",
+          "description": "The username of the user."
+        },
+        "role": {
+          "type": "string",
+          "description": "The role of the user (e.g., 'commander', 'sub-commander')."
+        },
+        "assignedUnitId": {
+          "type": "string",
+          "description": "Reference to MilitaryUnit. The ID of the military unit this user is assigned to, if any. (Relationship: MilitaryUnit 1:N User)"
+        },
+        "canSeeAllUnits": {
+          "type": "boolean",
+          "description": "Indicates whether the user has permission to see all military units on the map. Only relevant for sub-commanders."
+        }
+      },
+      "required": [
+        "id",
+        "username",
+        "role"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/military_units/{militaryUnitId}",
+        "definition": {
+          "entityName": "MilitaryUnit",
+          "schema": {
+            "$ref": "#/backend/entities/MilitaryUnit"
+          },
+          "description": "Represents military units. Requires authentication to read or write. Includes denormalized 'assignedUnitId' in operation targets to avoid authorization `get()` calls.",
+          "params": [
+            {
+              "name": "militaryUnitId",
+              "description": "The unique identifier for the military unit."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/operation_targets/{operationTargetId}",
+        "definition": {
+          "entityName": "OperationTarget",
+          "schema": {
+            "$ref": "#/backend/entities/OperationTarget"
+          },
+          "description": "Represents operation targets assigned to military units. Requires authentication to read or write. Stores the unit id the target is assigned to.",
+          "params": [
+            {
+              "name": "operationTargetId",
+              "description": "The unique identifier for the operation target."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/decoys/{decoyId}",
+        "definition": {
+          "entityName": "Decoy",
+          "schema": {
+            "$ref": "#/backend/entities/Decoy"
+          },
+          "description": "Represents decoy coordinates displayed on the public feed. Publicly readable.",
+          "params": [
+            {
+              "name": "decoyId",
+              "description": "The unique identifier for the decoy."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Represents a user of the system. Requires authentication to read or write. Contains role and unit assignment information.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure is designed to support GeoShield's requirements for real-time unit tracking, secure communication, and decoy coordinate generation, while adhering to the core design principles of Authorization Independence, Clarity of Intent, DBAC, QAPs, and Invariants. The structure prioritizes denormalization and segregation to simplify security rules and enable atomic operations.\n\n*   **Authorization Independence:** The `assignedUnitId` field is denormalized into the `/operation_targets/{operationTargetId}` collection to avoid hierarchical authorization dependencies. Although users are associated with MilitaryUnits, operations are assigned to units, eliminating the need to check user roles within the military unit hierarchy to determine authorization for creating/modifying operations. Additionally, the canSeeAllUnits property is included in each user document, eliminating the need for custom claims.\n*   **Clarity of Intent:** The structure uses explicit naming conventions (e.g., `military_units`, `operation_targets`) and a dedicated `status` field in the `MilitaryUnit` entity. This makes the data model easy to understand and debug.\n*   **DBAC (No Custom Claims):** User roles are stored in the `/users/{userId}` document, and authorization relies solely on `request.auth.uid`. The `/roles_admin/{uid}` collection can be used for global admin privileges.\n*   **QAPs (Rules are not Filters):** The data structure supports secure `list` operations by segregating data with different access needs. The `decoys` collection is publicly readable, while `military_units` and `operation_targets` are restricted to authorized users. The `canSeeAllUnits` property facilitates QAPs by indicating what the subcommander is authorized to list.\n*   **Invariants:** The structure supports the integrity of ownership, timestamps, and denormalized data. For example, the `assignedUnitId` in `OperationTarget` ensures that targets are always associated with a valid unit.\n\n\n**Data Segregation and Redundancy:**\n*   **Separate Collections for Entities:** Each major entity type (MilitaryUnit, OperationTarget, Decoy, User) has its own top-level collection.\n*   **Public vs. Private Data:** Decoy coordinates, intended for public consumption, are stored in a separate `/decoys` collection. This ensures they can be read without authentication.\n*   **Denormalization for Security and Efficiency:** The `assignedUnitId` field is duplicated in the `/operation_targets/{operationTargetId}` collection. This allows for direct querying of targets by assigned unit and simplifies security rules, as the rule doesn't need to traverse relationships to authorize access based on unit membership.\n"
+  }
+}
