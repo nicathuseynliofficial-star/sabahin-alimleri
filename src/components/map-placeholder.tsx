@@ -141,7 +141,7 @@ export default function MapPlaceholder() {
     if (editingTarget) {
       // Update existing target
       const targetDocRef = doc(firestore, 'operation_targets', editingTarget.id);
-      const updatedData = {
+      const updatedData: Partial<OperationTarget> = {
         name: targetName,
         assignedUnitId: assignedUnitId,
         status: targetStatus,
