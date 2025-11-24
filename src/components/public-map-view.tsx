@@ -8,6 +8,7 @@ import Image from 'next/image';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import type { Decoy } from '@/lib/types';
 import { Skeleton } from './ui/skeleton';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 export default function PublicMapView() {
   const { firestore } = useFirebase();
@@ -38,46 +39,56 @@ export default function PublicMapView() {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="relative w-full aspect-[3/2] overflow-hidden rounded-md border-2 border-border bg-muted">
-          {mapImage ? (
-            <Image
-              src={mapImage.imageUrl}
-              alt={mapImage.description}
-              fill
-              className="object-cover"
-              data-ai-hint={mapImage.imageHint}
-              priority
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <p>Xəritə yüklənir...</p>
-            </div>
-          )}
-
-          {isLoading ? (
-             <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                <div className="text-center space-y-4">
-                    <p className="text-white">Məlumatlar yoxlanılır...</p>
-                    <Skeleton className='w-48 h-4 mx-auto' />
-                </div>
-             </div>
-          ) : !decoy ? (
-             <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                <p className="text-white">Hal-hazırda aktiv yem mövqeyi yoxdur.</p>
-             </div>
-          ) : (
-            <div
-              className="absolute transition-all duration-1000"
-              style={{ top: `${decoy.latitude}%`, left: `${decoy.longitude}%`, transform: 'translate(-50%, -50%)' }}
-              title={`Yem mövqeyi: ${decoy.reasoning ? decoy.reasoning.substring(0, 100) : ''}...`}
-            >
-              <div className="relative w-6 h-6">
-                <div className="absolute inset-0 bg-red-600 rounded-full pulse-anim"></div>
-                <div className="absolute inset-1 bg-red-400 rounded-full"></div>
+        <TooltipProvider>
+          <div className="relative w-full aspect-[3/2] overflow-hidden rounded-md border-2 border-border bg-muted">
+            {mapImage ? (
+              <Image
+                src={mapImage.imageUrl}
+                alt={mapImage.description}
+                fill
+                className="object-cover"
+                data-ai-hint={mapImage.imageHint}
+                priority
+                unoptimized
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <p>Xəritə yüklənir...</p>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+
+            {isLoading ? (
+              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                  <div className="text-center space-y-4">
+                      <p className="text-white">Məlumatlar yoxlanılır...</p>
+                      <Skeleton className='w-48 h-4 mx-auto' />
+                  </div>
+              </div>
+            ) : !decoy ? (
+              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                  <p className="text-white">Hal-hazırda aktiv yem mövqeyi yoxdur.</p>
+              </div>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className="absolute transition-all duration-1000"
+                    style={{ top: `${decoy.latitude}%`, left: `${decoy.longitude}%`, transform: 'translate(-50%, -50%)' }}
+                  >
+                    <div className="relative w-6 h-6">
+                      <div className="absolute inset-0 bg-red-600 rounded-full pulse-anim"></div>
+                      <div className="absolute inset-1 bg-red-400 rounded-full"></div>
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className='font-bold text-red-400'>Yem Hədəf (Decoy)</p>
+                  <p className='text-muted-foreground max-w-xs'>Səbəb: {decoy.reasoning}</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        </TooltipProvider>
         <p className="text-center text-muted-foreground mt-4 text-sm">
           Bu xəritə strateji məqsədlər üçün təqdim olunur və yalnız komandanlıq tərəfindən təsdiqlənmiş məlumatları əks etdirir.
         </p>

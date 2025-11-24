@@ -30,7 +30,6 @@ type ClickCoordinates = {
 const SINGLE_MAP_ID = 'main';
 
 export default function MapPlaceholder() {
-  const [secureMode, setSecureMode] = useState(true);
   const { user } = useAuth();
   const { firestore } = useFirebase();
   const { toast } = useToast();
@@ -56,7 +55,7 @@ export default function MapPlaceholder() {
     if (!firestore) return null;
     return doc(firestore, 'decoys', 'latest');
   }, [firestore]);
-  const { data: latestDecoy, isLoading: isLoadingDecoy } = useDoc<Decoy>(latestDecoyDocRef);
+  const { data: latestDecoy } = useDoc<Decoy>(latestDecoyDocRef);
 
 
   // Base query for units
@@ -85,10 +84,12 @@ export default function MapPlaceholder() {
   
   const targetsQuery = useMemoFirebase(() => {
       if (!targetsBaseQuery) return null;
-      return query(targetsBaseQuery, where('mapId', '==', SINGLE_MAP_ID));
+      // As we only have one map now, we don't need to filter by mapId. 
+      // If we re-introduce multiple maps, this is where to add the filter.
+      return targetsBaseQuery;
   }, [targetsBaseQuery]);
 
-  const { data: targets, isLoading: isLoadingTargets } = useCollection<OperationTarget>(targetsQuery);
+  const { data: targets } = useCollection<OperationTarget>(targetsQuery);
 
 
   useEffect(() => {
@@ -99,10 +100,12 @@ export default function MapPlaceholder() {
   }, []);
 
   const handleSaveCustomMap = () => {
-    setMapUrl(tempMapUrl);
-    localStorage.setItem('mainMapUrl', tempMapUrl);
-    setIsMapImportOpen(false);
-    setTempMapUrl('');
+    if (tempMapUrl) {
+      setMapUrl(tempMapUrl);
+      localStorage.setItem('mainMapUrl', tempMapUrl);
+      setIsMapImportOpen(false);
+      setTempMapUrl('');
+    }
   };
 
 
@@ -181,6 +184,7 @@ export default function MapPlaceholder() {
         };
 
         const decoyDocRef = doc(firestore, 'decoys', 'latest');
+        // Use `set` with `merge: false` to completely overwrite the old decoy
         setDocumentNonBlocking(decoyDocRef, newDecoy, { merge: false });
 
         toast({
@@ -240,12 +244,6 @@ export default function MapPlaceholder() {
               Xəritəni Dəyişdir
             </Button>
           )}
-          <div className="flex items-center space-x-2">
-            <Switch id="secure-mode" checked={secureMode} onCheckedChange={setSecureMode} />
-            <Label htmlFor="secure-mode" className="text-accent font-medium">
-              Secure Mode
-            </Label>
-          </div>
         </div>
       </div>
       <Card className="flex-grow w-full border-primary/20">
