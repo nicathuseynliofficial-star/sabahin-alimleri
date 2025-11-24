@@ -7,22 +7,70 @@ import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Label } from './ui/label';
 import { Switch } from './ui/switch';
-import { Map, Shield, Target } from 'lucide-react';
+import { Map, Shield, Target, Upload } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth-provider';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
+import { Input } from './ui/input';
 
-type MapMode = 'azerbaijan' | 'karabakh';
+type MapMode = 'azerbaijan' | 'karabakh' | 'custom';
 
 export default function MapPlaceholder() {
   const [mapMode, setMapMode] = useState<MapMode>('azerbaijan');
   const [secureMode, setSecureMode] = useState(true);
   const { user } = useAuth();
   const isCommander = user?.role === 'commander';
+  
+  const [customMapUrl, setCustomMapUrl] = useState('');
+  const [tempCustomMapUrl, setTempCustomMapUrl] = useState('');
+  const [isMapImportOpen, setIsMapImportOpen] = useState(false);
 
-  const mapImage = PlaceHolderImages.find(
-    (img) => img.id === (mapMode === 'azerbaijan' ? 'azerbaijan-map' : 'karabakh-map')
-  );
+  useEffect(() => {
+    const storedMapUrl = localStorage.getItem('customMapUrl');
+    const storedMapMode = localStorage.getItem('mapMode') as MapMode;
+    if (storedMapUrl) {
+      setCustomMapUrl(storedMapUrl);
+    }
+    if (storedMapMode) {
+      setMapMode(storedMapMode);
+    }
+  }, []);
+
+  const handleSaveCustomMap = () => {
+    setCustomMapUrl(tempCustomMapUrl);
+    localStorage.setItem('customMapUrl', tempCustomMapUrl);
+    setMapMode('custom');
+    localStorage.setItem('mapMode', 'custom');
+    setIsMapImportOpen(false);
+  };
+
+  const handleMapModeChange = (value: string) => {
+    const newMode = value as MapMode;
+    setMapMode(newMode);
+    localStorage.setItem('mapMode', newMode);
+  }
+
+  const mapImageSrc = () => {
+    if (mapMode === 'custom' && customMapUrl) {
+      return customMapUrl;
+    }
+    const selectedMap = PlaceHolderImages.find(
+      (img) => img.id === (mapMode === 'azerbaijan' ? 'azerbaijan-map' : 'karabakh-map')
+    );
+    return selectedMap?.imageUrl ?? PlaceHolderImages[0].imageUrl;
+  }
+  
+  const mapImageAlt = () => {
+     if (mapMode === 'custom') {
+      return 'Custom imported map';
+    }
+    const selectedMap = PlaceHolderImages.find(
+      (img) => img.id === (mapMode === 'azerbaijan' ? 'azerbaijan-map' : 'karabakh-map')
+    );
+    return selectedMap?.description ?? 'Map';
+  }
+
 
   // Placeholder data for units and targets
   const [units, setUnits] = useState([
@@ -48,7 +96,7 @@ export default function MapPlaceholder() {
       <div className="flex-shrink-0 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Əməliyyat Xəritəsi</h1>
         <div className="flex items-center gap-6">
-          <RadioGroup defaultValue="azerbaijan" onValueChange={(value) => setMapMode(value as MapMode)} className="flex items-center gap-4">
+          <RadioGroup value={mapMode} onValueChange={handleMapModeChange} className="flex items-center gap-4">
             <Label htmlFor="map-azerbaijan" className="flex items-center gap-2 cursor-pointer">
               <RadioGroupItem value="azerbaijan" id="map-azerbaijan" />
               Ümumi Xəritə
@@ -57,7 +105,17 @@ export default function MapPlaceholder() {
               <RadioGroupItem value="karabakh" id="map-karabakh" />
               Qarabağ
             </Label>
+             {customMapUrl && (
+              <Label htmlFor="map-custom" className="flex items-center gap-2 cursor-pointer">
+                <RadioGroupItem value="custom" id="map-custom" />
+                İdxal edilmiş
+              </Label>
+            )}
           </RadioGroup>
+          <Button variant="outline" size="sm" onClick={() => setIsMapImportOpen(true)}>
+            <Upload className="mr-2 h-4 w-4" />
+            Xəritəni Dəyişdir
+          </Button>
           <div className="flex items-center space-x-2">
             <Switch id="secure-mode" checked={secureMode} onCheckedChange={setSecureMode} />
             <Label htmlFor="secure-mode" className="text-accent font-medium">
@@ -70,17 +128,13 @@ export default function MapPlaceholder() {
         <CardContent className="p-2 h-full">
           <TooltipProvider>
             <div className="relative w-full h-full rounded-md overflow-hidden bg-muted" onClick={handleMapClick}>
-              {mapImage ? (
-                <Image
-                  src={mapImage.imageUrl}
-                  alt={mapImage.description}
-                  fill
-                  className="object-cover"
-                  data-ai-hint={mapImage.imageHint}
-                />
-              ) : (
-                <div className="flex items-center justify-center h-full">Xəritə Yüklənir...</div>
-              )}
+              <Image
+                src={mapImageSrc()}
+                alt={mapImageAlt()}
+                fill
+                className="object-cover"
+                unoptimized={mapMode === 'custom'}
+              />
               {/* Render Units */}
               {units.map((unit) => (
                 <Tooltip key={unit.id}>
@@ -116,6 +170,29 @@ export default function MapPlaceholder() {
           </TooltipProvider>
         </CardContent>
       </Card>
+      <Dialog open={isMapImportOpen} onOpenChange={setIsMapImportOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Xəritə İdxal Et</DialogTitle>
+                <DialogDescription>
+                    Yeni xəritə üçün bir şəkil URL-i daxil edin. Bu xəritə brauzerinizin yaddaşında saxlanacaq.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+                <Label htmlFor="map-url">Xəritə URL</Label>
+                <Input 
+                    id="map-url"
+                    placeholder="https://example.com/map.jpg"
+                    value={tempCustomMapUrl}
+                    onChange={(e) => setTempCustomMapUrl(e.target.value)}
+                />
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsMapImportOpen(false)}>Ləğv et</Button>
+                <Button onClick={handleSaveCustomMap}>Yadda Saxla</Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
