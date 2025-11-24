@@ -14,7 +14,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useFirebase } from '@/firebase/provider';
-import { doc } from 'firebase/firestore';
+import { collection, doc, getDocs, query, where } from 'firebase/firestore';
 import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { v4 as uuidv4 } from 'uuid';
 import type { MilitaryUnit, UserProfile } from '@/lib/types';
@@ -54,11 +54,26 @@ export default function UnitManagement({ isOpen, onOpenChange }: UnitManagementP
     }
 
     setLoading(true);
-    
-    const newUnitId = uuidv4();
-    const newUserId = uuidv4();
 
     try {
+      // Check for uniqueness of the unit name
+      const unitsRef = collection(firestore, 'military_units');
+      const q = query(unitsRef, where('name', '==', unitName));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        toast({
+          variant: "destructive",
+          title: "Xəta",
+          description: `"${unitName}" adlı bölük artıq mövcuddur. Fərqli ad seçin.`,
+        });
+        setLoading(false);
+        return;
+      }
+
+      const newUnitId = uuidv4();
+      const newUserId = uuidv4();
+
       // 1. Create the sub-commander user
       const userDocRef = doc(firestore, 'users', newUserId);
       const newUser: UserProfile = {
