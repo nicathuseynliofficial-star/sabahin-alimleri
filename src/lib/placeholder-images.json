@@ -1,3 +1,16 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "azerbaijan-map",
+      "description": "A satellite map of Azerbaijan.",
+      "imageUrl": "https://images.unsplash.com/photo-1675015989087-562d52d254f8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxtYXAlMjBhemVyYmFpamFufGVufDB8fHx8MTc2Mzk5MDk2Nnww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "map azerbaijan"
+    },
+    {
+      "id": "karabakh-map",
+      "description": "A satellite map of the Karabakh region.",
+      "imageUrl": "https://images.unsplash.com/photo-1584535687876-7e246f1e4106?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxtYXAlMjBtb3VudGFpbnN8ZW58MHx8fHwxNzYzOTkwOTY2fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "map mountains"
+    }
+  ]
 }
