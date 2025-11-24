@@ -205,6 +205,34 @@ export default function MapPlaceholder() {
     }
   };
 
+  const getTargetClasses = (target: OperationTarget) => {
+    const isEncryptingTarget = isEncrypting && selectedTargetForDecoy?.id === target.id;
+    if (isEncryptingTarget) {
+      return 'animate-ping text-yellow-400';
+    }
+
+    let colorClass = '';
+    switch (target.status) {
+      case 'active':
+        colorClass = 'text-green-500';
+        break;
+      case 'passive':
+        colorClass = 'text-red-500';
+        break;
+      case 'pending':
+      default:
+        colorClass = 'text-blue-400';
+        break;
+    }
+    
+    // Commanders see pulsing targets, sub-commanders see static ones unless they can see all
+    if (isCommander || (user?.role === 'sub-commander' && user.canSeeAllUnits)) {
+        return `${colorClass} animate-pulse`;
+    }
+    
+    return colorClass;
+  };
+
 
   return (
     <div className="h-screen w-full flex flex-col p-4 gap-4">
@@ -253,7 +281,7 @@ export default function MapPlaceholder() {
                  <Tooltip key={target.id}>
                     <TooltipTrigger asChild>
                         <div className="absolute" style={{ top: `${target.latitude}%`, left: `${target.longitude}%` }}>
-                            <Target className={`w-8 h-8 ${isEncrypting && selectedTargetForDecoy?.id === target.id ? 'animate-ping text-yellow-400' : isCommander ? 'text-blue-400 animate-pulse' : 'text-green-400 animate-pulse'}`} />
+                            <Target className={`w-8 h-8 ${getTargetClasses(target)}`} />
                         </div>
                     </TooltipTrigger>
                     <TooltipContent>
