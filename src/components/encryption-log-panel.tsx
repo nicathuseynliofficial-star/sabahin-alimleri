@@ -43,9 +43,8 @@ export default function EncryptionLogPanel({ activeStep, isEncrypting }: Encrypt
         if (isEncrypting) {
             if (activeStep > 0 && activeStep <= logSteps.length) {
                 const currentStepIndex = activeStep - 1;
-                const randomLat = (40 + Math.random()).toFixed(4);
-                const randomLng = (49 + Math.random()).toFixed(4);
-                let resultText = `→ Nəticə: ${randomLat}, ${randomLng}`;
+                
+                let resultText = `→ Nəticə: TƏSDİQLƏNDİ`;
 
                 if (logSteps[currentStepIndex].isFinal) {
                     resultText = `→ Yem koordinatı: TƏSDİQLƏNDİ`;
