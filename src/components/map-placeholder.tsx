@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
-import { setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { setDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { collection, query, where, doc, getDocs, writeBatch } from 'firebase/firestore';
 import type { MilitaryUnit, OperationTarget, Decoy } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
@@ -91,12 +91,10 @@ export default function MapPlaceholder() {
 
 
   useEffect(() => {
-    const storedMapUrl = localStorage.getItem('mainMapUrl');
     const defaultMap = PlaceHolderImages.find(img => img.id === 'azerbaijan-map')?.imageUrl;
+    const storedMapUrl = localStorage.getItem('mainMapUrl') || defaultMap;
     if (storedMapUrl) {
       setMapUrl(storedMapUrl);
-    } else if (defaultMap) {
-      setMapUrl(defaultMap);
     }
   }, []);
 
@@ -143,11 +141,13 @@ export default function MapPlaceholder() {
     if (editingTarget) {
       // Update existing target
       const targetDocRef = doc(firestore, 'operation_targets', editingTarget.id);
-      updateDocumentNonBlocking(targetDocRef, {
+      const updatedData = {
         name: targetName,
         assignedUnitId: assignedUnitId,
         status: targetStatus,
-      });
+      };
+      setDocumentNonBlocking(targetDocRef, updatedData, { merge: true });
+
       toast({
         title: "Hədəf Yeniləndi",
         description: `"${targetName}" adlı hədəf məlumatları yeniləndi.`
@@ -350,7 +350,7 @@ export default function MapPlaceholder() {
               {units?.map((unit) => (
                 <Tooltip key={unit.id}>
                   <TooltipTrigger asChild>
-                    <div className="absolute" style={{ top: `${unit.latitude}%`, left: `${unit.longitude}%` }} data-interactive>
+                    <div className="absolute" style={{ top: `${unit.latitude}%`, left: `${unit.longitude}%` }} data-interactive onClick={(e) => e.stopPropagation()}>
                       <Shield className="w-8 h-8 text-white fill-blue-500/50 stroke-2" />
                     </div>
                   </TooltipTrigger>
@@ -365,11 +365,11 @@ export default function MapPlaceholder() {
                  <div key={target.id} className="absolute" style={{ top: `${target.latitude}%`, left: `${target.longitude}%` }} data-interactive>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button>
+                        <button onClick={(e) => e.stopPropagation()}>
                            <Target className={`w-8 h-8 ${getTargetClasses(target.status)} cursor-pointer`} />
                         </button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent>
+                      <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
                           <DropdownMenuItem disabled>
                             <div>
                                 <p className="font-semibold">Hədəf: {target.name}</p>

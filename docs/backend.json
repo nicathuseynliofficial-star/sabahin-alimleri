@@ -66,6 +66,10 @@
           "type": "string",
           "description": "Reference to MilitaryUnit. The ID of the military unit assigned to this target. (Relationship: MilitaryUnit 1:N OperationTarget)"
         },
+        "status": {
+            "type": "string",
+            "description": "The status of the operation target (e.g., 'pending', 'active', 'passive')."
+        },
         "mapId": {
             "type": "string",
             "description": "The ID of the map this target belongs to."
@@ -77,6 +81,7 @@
         "latitude",
         "longitude",
         "assignedUnitId",
+        "status",
         "mapId"
       ]
     },
