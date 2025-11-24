@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Badge } from './ui/badge';
@@ -9,25 +9,73 @@ import { MoreVertical, PlusCircle, Trash2 } from 'lucide-react';
 import { Switch } from './ui/switch';
 import { Label } from './ui/label';
 import UnitManagement from './unit-management';
-import type { MilitaryUnit } from '@/lib/types';
+import type { MilitaryUnit, UserProfile } from '@/lib/types';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
-
-const mockUnits: MilitaryUnit[] = [
-    { id: 'unit1', name: 'Qartal-01', status: 'operating', commanderUsername: 'qartal_komandir', location: { lat: 40.3, lng: 49.8 } },
-    { id: 'unit2', name: 'Şahin-07', status: 'offline', commanderUsername: 'sahin_komandir', location: { lat: 40.5, lng: 49.9 } },
-    { id: 'unit3', name: 'Laçın-03', status: 'alert', commanderUsername: 'lacin_komandir', location: { lat: 39.9, lng: 46.7 } },
-];
+import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, doc } from 'firebase/firestore';
+import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
 
 
 export default function UnitsDashboard() {
-  const [units, setUnits] = useState<MilitaryUnit[]>(mockUnits);
-  const [selectedUnit, setSelectedUnit] = useState<MilitaryUnit | null>(mockUnits[0]);
+  const { firestore } = useFirebase();
+  const { toast } = useToast();
   const [isNewUnitDialogOpen, setIsNewUnitDialogOpen] = useState(false);
+  const [unitToDelete, setUnitToDelete] = useState<MilitaryUnit | null>(null);
+
+  const unitsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'military_units');
+  }, [firestore]);
+  const { data: units, isLoading: isLoadingUnits } = useCollection<MilitaryUnit>(unitsQuery);
+
+  const usersQuery = useMemoFirebase(() => {
+    if(!firestore) return null;
+    return collection(firestore, 'users');
+  }, [firestore]);
+  const { data: users, isLoading: isLoadingUsers } = useCollection<UserProfile>(usersQuery);
+
+  const [selectedUnit, setSelectedUnit] = useState<MilitaryUnit | null>(null);
+
+  const handleDeleteClick = (unit: MilitaryUnit) => {
+    setUnitToDelete(unit);
+  };
+
+  const confirmDelete = () => {
+    if (unitToDelete && firestore) {
+      const unitDocRef = doc(firestore, 'military_units', unitToDelete.id);
+      deleteDocumentNonBlocking(unitDocRef);
+
+      // Also delete the associated commander user
+      if (unitToDelete.commanderId) {
+        const userDocRef = doc(firestore, 'users', unitToDelete.commanderId);
+        deleteDocumentNonBlocking(userDocRef);
+      }
+      
+      toast({
+        title: "Bölük Silindi",
+        description: `${unitToDelete.name} və əlaqəli komandir sistemdən silindi.`,
+      });
+      setUnitToDelete(null);
+      setSelectedUnit(null);
+    }
+  };
+
 
   const getStatusVariant = (status: MilitaryUnit['status']) => {
     switch (status) {
@@ -40,6 +88,11 @@ export default function UnitsDashboard() {
     }
   };
 
+  const getCommanderUsername = (commanderId: string | undefined) => {
+    if (!users || !commanderId) return 'Təyin edilməyib';
+    return users.find(u => u.id === commanderId)?.username || 'Naməlum';
+  }
+
   return (
     <div className="h-screen w-full grid grid-cols-1 lg:grid-cols-3 gap-4 p-4">
       <div className="lg:col-span-1 flex flex-col">
@@ -47,7 +100,7 @@ export default function UnitsDashboard() {
           <CardHeader className='flex-row items-center justify-between'>
             <div>
                 <CardTitle>Bölüklər</CardTitle>
-                <CardDescription>{units.length} aktiv bölük</CardDescription>
+                <CardDescription>{units?.length ?? 0} aktiv bölük</CardDescription>
             </div>
             <Button size="sm" onClick={() => setIsNewUnitDialogOpen(true)}>
                 <PlusCircle className='mr-2 h-4 w-4' />
@@ -64,14 +117,26 @@ export default function UnitsDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {units.map((unit) => (
-                  <TableRow key={unit.id} onClick={() => setSelectedUnit(unit)} className="cursor-pointer">
+                {isLoadingUnits ? (
+                    <TableRow><TableCell colSpan={3}>Yüklənir...</TableCell></TableRow>
+                ) : units?.map((unit) => (
+                  <TableRow key={unit.id} onClick={() => setSelectedUnit(unit)} className={`cursor-pointer ${selectedUnit?.id === unit.id ? 'bg-muted/50' : ''}`}>
                     <TableCell className="font-medium">{unit.name}</TableCell>
                     <TableCell><Badge variant={getStatusVariant(unit.status)}>{unit.status}</Badge></TableCell>
                     <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setSelectedUnit(unit); }}>
-                            <MoreVertical className='h-4 w-4' />
-                        </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setSelectedUnit(unit); }}>
+                                    <MoreVertical className='h-4 w-4' />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align='end'>
+                                <DropdownMenuItem onClick={() => handleDeleteClick(unit)} className="text-destructive">
+                                    <Trash2 className='mr-2 h-4 w-4' />
+                                    Sil
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -99,7 +164,7 @@ export default function UnitsDashboard() {
                 </div>
                 <div className='space-y-2'>
                     <h3 className='font-semibold'>Komandir</h3>
-                    <p>{selectedUnit.commanderUsername}</p>
+                    <p>{getCommanderUsername(selectedUnit.commanderId)}</p>
                 </div>
                 <div className='space-y-4 rounded-lg border p-4'>
                     <h3 className='font-semibold'>İcazələr</h3>
@@ -108,19 +173,32 @@ export default function UnitsDashboard() {
                         <Switch id="can-see-all-units" />
                     </div>
                 </div>
-                <Button variant="destructive" className="w-full">
-                    <Trash2 className='mr-2 h-4 w-4'/>
-                    Bölüyü Sil
-                </Button>
             </CardContent>
           </Card>
         ) : (
-            <div className="flex h-full items-center justify-center text-muted-foreground">
+            <div className="flex h-full items-center justify-center text-muted-foreground rounded-lg border-dashed border-2">
                 Məlumat üçün bölük seçin.
             </div>
         )}
       </div>
       <UnitManagement isOpen={isNewUnitDialogOpen} onOpenChange={setIsNewUnitDialogOpen} />
+
+      <AlertDialog open={!!unitToDelete} onOpenChange={(open) => !open && setUnitToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Silməni Təsdiqlə</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{unitToDelete?.name}" bölüyünü və ona bağlı komandir hesabını silmək istədiyinizdən əminsinizmi? Bu əməliyyat geri qaytarıla bilməz.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setUnitToDelete(null)}>Ləğv Et</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Bəli, Sil
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
