@@ -357,11 +357,11 @@ export default function MapPlaceholder() {
               {targets?.map((target) => (
                  <Tooltip key={target.id}>
                     <TooltipTrigger asChild>
-                        <div className="absolute" style={{ top: `${target.latitude}%`, left: `${target.longitude}%` }} data-interactive>
+                        <div className="absolute" style={{ top: `${target.latitude}%`, left: `${target.longitude}%` }} data-interactive onClick={(e) => e.stopPropagation()}>
                             <Target className={`w-8 h-8 ${getTargetClasses(target)}`} />
                         </div>
                     </TooltipTrigger>
-                    <TooltipContent className="p-0" data-interactive>
+                    <TooltipContent className="p-0" data-interactive onClick={(e) => e.stopPropagation()}>
                       <div className='p-2'>
                         <p>Hədəf: {target.name}</p>
                         <p className='text-muted-foreground'>Bölük: {units?.find(u => u.id === target.assignedUnitId)?.name ?? 'Naməlum'}</p>
@@ -384,7 +384,7 @@ export default function MapPlaceholder() {
               {decoys?.map((decoy) => (
                  <Tooltip key={decoy.id}>
                     <TooltipTrigger asChild>
-                      <div className="absolute" style={{ top: `${decoy.latitude}%`, left: `${decoy.longitude}%`, transform: 'translate(-50%, -50%)' }} data-interactive>
+                      <div className="absolute" style={{ top: `${decoy.latitude}%`, left: `${decoy.longitude}%`, transform: 'translate(-50%, -50%)' }} data-interactive onClick={(e) => e.stopPropagation()}>
                         <div className="relative w-6 h-6">
                             <div className="absolute inset-0 bg-red-600 rounded-full pulse-anim"></div>
                             <div className="absolute inset-1 bg-red-400 rounded-full"></div>
