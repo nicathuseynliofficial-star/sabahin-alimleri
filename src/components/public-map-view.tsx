@@ -97,5 +97,3 @@ export default function PublicMapView() {
     </Card>
   );
 }
-
-    

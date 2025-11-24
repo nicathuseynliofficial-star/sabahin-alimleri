@@ -221,8 +221,7 @@ export default function MapPlaceholder() {
             const decoyResult = await generateStrategicDecoys(decoyInput);
             
             const publicNames = ["Alfa", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"];
-            const newDecoy: Omit<Decoy, 'id' | 'timestamp'> & { id: string, timestamp: Date } = {
-                id: uuidv4(),
+            const newDecoy: Omit<Decoy, 'id'> = {
                 publicName: `Bölük ${publicNames[index % publicNames.length]}`,
                 latitude: decoyResult.decoyLatitude,
                 longitude: decoyResult.decoyLongitude,
@@ -231,8 +230,9 @@ export default function MapPlaceholder() {
                 timestamp: new Date()
             };
             
-            const decoyDocRef = doc(firestore, 'decoys', newDecoy.id);
-            return setDocumentNonBlocking(decoyDocRef, newDecoy, { merge: false });
+            const decoyWithId = { ...newDecoy, id: uuidv4() };
+            const decoyDocRef = doc(firestore, 'decoys', decoyWithId.id);
+            return setDocumentNonBlocking(decoyDocRef, decoyWithId, { merge: false });
         });
 
         await Promise.all(decoyPromises);
@@ -254,7 +254,8 @@ export default function MapPlaceholder() {
     }
   };
 
-  const handleEditTargetClick = (target: OperationTarget) => {
+  const handleEditTargetClick = (e: React.MouseEvent, target: OperationTarget) => {
+    e.stopPropagation();
     setEditingTarget(target);
     setTargetName(target.name);
     setAssignedUnitId(target.assignedUnitId);
@@ -263,7 +264,8 @@ export default function MapPlaceholder() {
     setIsTargetDialogOpen(true);
   };
   
-  const handleDeleteTargetClick = async (target: OperationTarget) => {
+  const handleDeleteTargetClick = async (e: React.MouseEvent, target: OperationTarget) => {
+     e.stopPropagation();
      if (!firestore) return;
      const confirmation = confirm(`"${target.name}" adlı hədəfi silmək istədiyinizdən əminsiniz? Bu əməliyyat geri qaytarıla bilməz.`);
      if (confirmation) {
@@ -367,10 +369,10 @@ export default function MapPlaceholder() {
                       </div>
                         {isCommander && (
                           <div className='flex items-center border-t mt-1 p-1'>
-                            <Button variant="ghost" size="sm" className="w-full justify-start gap-1" onClick={() => handleEditTargetClick(target)}>
+                            <Button variant="ghost" size="sm" className="w-full justify-start gap-1" onClick={(e) => handleEditTargetClick(e, target)}>
                               <Edit size={14} /> Redaktə et
                             </Button>
-                            <Button variant="ghost" size="sm" className="w-full justify-start gap-1 text-destructive hover:text-destructive" onClick={() => handleDeleteTargetClick(target)}>
+                            <Button variant="ghost" size="sm" className="w-full justify-start gap-1 text-destructive hover:text-destructive" onClick={(e) => handleDeleteTargetClick(e, target)}>
                               <Trash2 size={14} /> Sil
                             </Button>
                           </div>
@@ -392,7 +394,12 @@ export default function MapPlaceholder() {
                     <TooltipContent data-interactive>
                         <p className='font-bold text-red-400'>Yem Hədəf (Decoy)</p>
                         <p className='text-muted-foreground'>Ad: {decoy.publicName}</p>
-                        {isCommander && <p className='text-muted-foreground max-w-xs'>Səbəb: {decoy.reasoning}</p>}
+                        {isCommander && (
+                          <div className='mt-2 pt-2 border-t border-border'>
+                              <p className='font-semibold text-xs mb-1'>Necə Şifrələndi:</p>
+                              <p className='text-muted-foreground max-w-xs text-xs'>{decoy.reasoning}</p>
+                          </div>
+                        )}
                     </TooltipContent>
                 </Tooltip>
               ))}
