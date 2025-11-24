@@ -34,11 +34,6 @@ export type GenerateStrategicDecoysInput = z.infer<typeof GenerateStrategicDecoy
 const GenerateStrategicDecoysOutputSchema = z.object({
   decoyLatitude: z.number().describe('Latitude of the generated decoy coordinate.'),
   decoyLongitude: z.number().describe('Longitude of the generated decoy coordinate.'),
-  reasoning: z
-    .string()
-    .describe(
-      'Explanation of why this location was chosen as a decoy, considering the input factors.'
-    ),
 });
 export type GenerateStrategicDecoysOutput = z.infer<typeof GenerateStrategicDecoysOutputSchema>;
 
@@ -71,9 +66,8 @@ const prompt = ai.definePrompt({
   - Enemy Patrol Routes: The decoy should be near known enemy patrol routes to increase detection likelihood.
 
   The decoy location should be a place an enemy would likely investigate.
-  Explain your reasoning for choosing this particular location.
 
-  Output the decoy's latitude, longitude, and your reasoning.`,
+  Output ONLY the decoy's latitude and longitude. Do NOT provide any reasoning.`,
 });
 
 const generateStrategicDecoysFlow = ai.defineFlow(

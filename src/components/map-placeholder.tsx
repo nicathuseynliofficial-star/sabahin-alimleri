@@ -153,7 +153,8 @@ export default function MapPlaceholder({
         assignedUnitId: assignedUnitId,
         status: targetStatus,
       };
-      setDocumentNonBlocking(targetDocRef, updatedData, { merge: true });
+       setDocumentNonBlocking(targetDocRef, updatedData, { merge: true });
+
 
       toast({
         title: "Hədəf Yeniləndi",
@@ -244,7 +245,7 @@ export default function MapPlaceholder({
             
             const publicNames = ["Alfa", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"];
             
-            const detailedReasoning = `[SİSTEM] Əməliyyat gözlənilir...
+           const reasoningText = `[SİSTEM] Əməliyyat gözlənilir...
 
 1. Collatz Qarışdırması
 → İlkin koordinat emal edilir...
@@ -273,7 +274,7 @@ export default function MapPlaceholder({
                 publicName: `Bölük ${publicNames[index % publicNames.length]}`,
                 latitude: decoyResult.decoyLatitude,
                 longitude: decoyResult.decoyLongitude,
-                reasoning: detailedReasoning,
+                reasoning: reasoningText,
             };
             
             const decoyDocRef = doc(firestore, 'decoys', newDecoy.id);
