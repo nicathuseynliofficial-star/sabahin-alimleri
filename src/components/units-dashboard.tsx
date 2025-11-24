@@ -230,7 +230,7 @@ export default function UnitsDashboard() {
                           </Label>
                           <Switch 
                             id="can-see-all-units"
-                            checked={commanderForSelectedUnit.canSeeAllUnits}
+                            checked={!!commanderForSelectedUnit.canSeeAllUnits}
                             onCheckedChange={(checked) => handlePermissionChange(selectedUnit, checked)}
                             disabled={isLoadingUsers}
                           />
@@ -266,3 +266,5 @@ export default function UnitsDashboard() {
     </div>
   );
 }
+
+    

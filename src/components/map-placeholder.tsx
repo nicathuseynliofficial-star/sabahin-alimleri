@@ -6,21 +6,21 @@ import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Label } from './ui/label';
-import { Switch } from './ui/switch';
-import { Map, Shield, Target, Upload, Dot, Bot, Trash2, Edit } from 'lucide-react';
+import { Map, Shield, Target, Upload, Bot, Trash2, Edit } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth-provider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { useFirebase, useCollection, useMemoFirebase, useDoc } from '@/firebase';
-import { addDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
+import { setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { collection, query, where, doc, getDocs, writeBatch } from 'firebase/firestore';
 import type { MilitaryUnit, OperationTarget, Decoy } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 import { useToast } from '@/hooks/use-toast';
 import { generateStrategicDecoys, type GenerateStrategicDecoysInput } from '@/ai/flows/generate-strategic-decoys';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 
 
 type ClickCoordinates = {
@@ -50,6 +50,9 @@ export default function MapPlaceholder() {
   
   // State for decoy generation
   const [isEncrypting, setIsEncrypting] = useState(false);
+
+  // State for delete confirmation dialog
+  const [targetToDelete, setTargetToDelete] = useState<OperationTarget | null>(null);
   
   const decoysQuery = useMemoFirebase(() => {
     if (!firestore) return null;
@@ -73,18 +76,16 @@ export default function MapPlaceholder() {
   // Base query for targets
   const targetsBaseQuery = useMemoFirebase(() => {
       if (!firestore || !user) return null;
-      const q = collection(firestore, 'operation_targets');
-
-      if (user.role === 'sub-commander' && !user.canSeeAllUnits && user.assignedUnitId) {
-          return query(q, where('assignedUnitId', '==', user.assignedUnitId));
-      }
-      return q;
+      return collection(firestore, 'operation_targets');
   }, [firestore, user]);
   
   const targetsQuery = useMemoFirebase(() => {
       if (!targetsBaseQuery) return null;
+      if (user?.role === 'sub-commander' && !user.canSeeAllUnits && user.assignedUnitId) {
+          return query(targetsBaseQuery, where('assignedUnitId', '==', user.assignedUnitId));
+      }
       return targetsBaseQuery;
-  }, [targetsBaseQuery]);
+  }, [targetsBaseQuery, user]);
 
   const { data: targets } = useCollection<OperationTarget>(targetsQuery);
 
@@ -153,7 +154,8 @@ export default function MapPlaceholder() {
       });
     } else if (targetCoordinates) {
       // Create new target
-       const newTarget: Omit<OperationTarget, 'id'> = {
+       const newTarget: OperationTarget = {
+          id: uuidv4(),
           name: targetName,
           assignedUnitId: assignedUnitId,
           latitude: targetCoordinates.y,
@@ -162,11 +164,9 @@ export default function MapPlaceholder() {
           mapId: SINGLE_MAP_ID,
       };
       
-      const targetWithId = { ...newTarget, id: uuidv4() };
-
       const targetsCollection = collection(firestore, 'operation_targets');
-      const targetDocRef = doc(targetsCollection, targetWithId.id);
-      setDocumentNonBlocking(targetDocRef, targetWithId);
+      const targetDocRef = doc(targetsCollection, newTarget.id);
+      setDocumentNonBlocking(targetDocRef, newTarget);
 
       toast({
           title: "Hədəf Yaradıldı",
@@ -222,7 +222,8 @@ export default function MapPlaceholder() {
             const decoyResult = await generateStrategicDecoys(decoyInput);
             
             const publicNames = ["Alfa", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"];
-            const newDecoy: Omit<Decoy, 'id'> = {
+            const newDecoy: Decoy = {
+                id: uuidv4(),
                 publicName: `Bölük ${publicNames[index % publicNames.length]}`,
                 latitude: decoyResult.decoyLatitude,
                 longitude: decoyResult.decoyLongitude,
@@ -231,9 +232,8 @@ export default function MapPlaceholder() {
                 timestamp: new Date()
             };
             
-            const decoyWithId = { ...newDecoy, id: uuidv4() };
-            const decoyDocRef = doc(firestore, 'decoys', decoyWithId.id);
-            return setDocumentNonBlocking(decoyDocRef, decoyWithId, { merge: false });
+            const decoyDocRef = doc(firestore, 'decoys', newDecoy.id);
+            return setDocumentNonBlocking(decoyDocRef, newDecoy, { merge: false });
         });
 
         await Promise.all(decoyPromises);
@@ -264,47 +264,56 @@ export default function MapPlaceholder() {
     setIsTargetDialogOpen(true);
   };
   
-  const handleDeleteTargetClick = async (target: OperationTarget) => {
-     if (!firestore) return;
-     const confirmation = confirm(`"${target.name}" adlı hədəfi silmək istədiyinizdən əminsiniz? Bu əməliyyat geri qaytarıla bilməz.`);
-     if (confirmation) {
+  const handleDeleteTargetClick = (target: OperationTarget) => {
+     setTargetToDelete(target);
+  }
+
+  const confirmDeleteTarget = async () => {
+    if (!targetToDelete || !firestore) return;
+
+    try {
+        const batch = writeBatch(firestore);
+        
         // Delete the target
-        const targetDocRef = doc(firestore, 'operation_targets', target.id);
-        deleteDocumentNonBlocking(targetDocRef);
+        const targetDocRef = doc(firestore, 'operation_targets', targetToDelete.id);
+        batch.delete(targetDocRef);
         
         // Also delete any associated decoys
-        const decoysToDeleteQuery = query(collection(firestore, 'decoys'), where('originalTargetId', '==', target.id));
+        const decoysToDeleteQuery = query(collection(firestore, 'decoys'), where('originalTargetId', '==', targetToDelete.id));
         const decoysSnapshot = await getDocs(decoysToDeleteQuery);
-        const deleteBatch = writeBatch(firestore);
         decoysSnapshot.forEach(decoyDoc => {
-            deleteBatch.delete(decoyDoc.ref);
+            batch.delete(decoyDoc.ref);
         });
-        await deleteBatch.commit();
+
+        await batch.commit();
 
         toast({
             title: "Hədəf Silindi",
-            description: `"${target.name}" adlı hədəf və əlaqəli yemlər silindi.`
+            description: `"${targetToDelete.name}" adlı hədəf və əlaqəli yemlər silindi.`
         });
-     }
-  }
+    } catch (error) {
+        console.error("Error deleting target and associated decoys:", error);
+        toast({
+            variant: "destructive",
+            title: "Silmə Xətası",
+            description: "Hədəf silinərkən bir problem yarandı."
+        });
+    } finally {
+        setTargetToDelete(null);
+    }
+  };
 
 
-  const getTargetClasses = (target: OperationTarget) => {
-    let colorClass = '';
-    switch (target.status) {
+  const getTargetClasses = (status: OperationTarget['status']) => {
+    switch (status) {
       case 'active':
-        colorClass = 'text-green-500';
-        break;
+        return 'text-green-500';
       case 'passive':
-        colorClass = 'text-red-500';
-        break;
+        return 'text-red-500';
       case 'pending':
       default:
-        colorClass = 'text-blue-400';
-        break;
+        return 'text-blue-400';
     }
-    
-    return colorClass;
   };
 
 
@@ -330,7 +339,7 @@ export default function MapPlaceholder() {
       <Card className="flex-grow w-full border-primary/20">
         <CardContent className="p-2 h-full">
           <TooltipProvider>
-            <div className="relative w-full h-full rounded-md overflow-hidden bg-muted" onClick={isCommander ? handleMapClick : undefined}>
+            <div className="relative w-full h-full rounded-md overflow-hidden bg-muted" onClick={handleMapClick}>
               <Image
                 src={mapUrl}
                 alt="Ümumi əməliyyat xəritəsi"
@@ -358,7 +367,7 @@ export default function MapPlaceholder() {
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button>
-                           <Target className={`w-8 h-8 ${getTargetClasses(target)} cursor-pointer`} />
+                           <Target className={`w-8 h-8 ${getTargetClasses(target.status)} cursor-pointer`} />
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>
@@ -501,6 +510,27 @@ export default function MapPlaceholder() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Target Confirmation Dialog */}
+      <AlertDialog open={!!targetToDelete} onOpenChange={(open) => !open && setTargetToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Silməni Təsdiqlə</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{targetToDelete?.name}" adlı hədəfi silmək istədiyinizdən əminsiniz? Bu əməliyyat geri qaytarıla bilməz.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setTargetToDelete(null)}>Ləğv Et</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteTarget} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Bəli, Sil
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   );
 }
+
+    
