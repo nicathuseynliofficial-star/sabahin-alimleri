@@ -21,7 +21,6 @@ import { useToast } from '@/hooks/use-toast';
 import { generateStrategicDecoys, type GenerateStrategicDecoysInput } from '@/ai/flows/generate-strategic-decoys';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
-import EncryptionLogPanel from './encryption-log-panel';
 
 
 type ClickCoordinates = {
@@ -31,7 +30,17 @@ type ClickCoordinates = {
 
 const SINGLE_MAP_ID = 'main';
 
-export default function MapPlaceholder() {
+export default function MapPlaceholder({
+  isEncrypting,
+  setIsEncrypting,
+  encryptionStep,
+  setEncryptionStep
+}: {
+  isEncrypting: boolean;
+  setIsEncrypting: (isEncrypting: boolean) => void;
+  encryptionStep: number;
+  setEncryptionStep: (step: number) => void;
+}) {
   const { user } = useAuth();
   const { firestore } = useFirebase();
   const { toast } = useToast();
@@ -48,10 +57,6 @@ export default function MapPlaceholder() {
   const [assignedUnitId, setAssignedUnitId] = useState('');
   const [targetStatus, setTargetStatus] = useState<OperationTarget['status']>('pending');
   const [editingTarget, setEditingTarget] = useState<OperationTarget | null>(null);
-  
-  // State for decoy generation
-  const [isEncrypting, setIsEncrypting] = useState(false);
-  const [encryptionStep, setEncryptionStep] = useState(0);
 
   // State for delete confirmation dialog
   const [targetToDelete, setTargetToDelete] = useState<OperationTarget | null>(null);
@@ -238,21 +243,30 @@ export default function MapPlaceholder() {
             const decoyResult = await generateStrategicDecoys(decoyInput);
             
             const publicNames = ["Alfa", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"];
-
-            const initialLat = target.latitude.toFixed(4);
-            const initialLon = target.longitude.toFixed(4);
-            const finalLat = decoyResult.decoyLatitude.toFixed(4);
-            const finalLon = decoyResult.decoyLongitude.toFixed(4);
             
-            // Simulate intermediate coordinates for the log
-            const step1Lat = (target.latitude + (decoyResult.decoyLatitude - target.latitude) * 0.25).toFixed(4);
-            const step1Lon = (target.longitude + (decoyResult.decoyLongitude - target.longitude) * 0.25).toFixed(4);
-            const step2Lat = (target.latitude + (decoyResult.decoyLatitude - target.latitude) * 0.5).toFixed(4);
-            const step2Lon = (target.longitude + (decoyResult.decoyLongitude - target.longitude) * 0.5).toFixed(4);
-            const step3Lat = (target.latitude + (decoyResult.decoyLatitude - target.latitude) * 0.75).toFixed(4);
-            const step3Lon = (target.longitude + (decoyResult.decoyLongitude - target.longitude) * 0.75).toFixed(4);
+            const detailedReasoning = `[SİSTEM] Əməliyyat gözlənilir...
 
-            const detailedReasoning = `[SİSTEM] Əməliyyat gözlənilir...\n\n1. Collatz Qarışdırması\n→ İlkin koordinat: ${initialLat}, ${initialLon}\n→ Nəticə: ${step1Lat}, ${step1Lon}\n\n2. Prime-Jump Şifrələməsi\n→ Sadə ədəd cədvəli tətbiq edilir...\n→ Nəticə: ${step2Lat}, ${step2Lon}\n\n3. Fibonaççi Spiralı\n→ Spiral ofset tətbiq edilir...\n→ Nəticə: ${step3Lat}, ${step3Lon}\n\n4. Lehmer RNG Sürüşdürməsi\n→ Təsadüfi, lakin təkrarlanabilən sürüşdürmə...\n→ Nəticə: ${finalLat}, ${finalLon}\n\n5. Kvant Geo-Sürüşdürmə\n→ Yekun təhlükəsizlik layı tətbiq edildi.\n→ Yem koordinatı: ${decoyResult.decoyLatitude.toFixed(6)}, ${decoyResult.decoyLongitude.toFixed(6)}\n\n[SİSTEM] Proses tamamlandı. Yem yayıma hazırdır.`;
+1. Collatz Qarışdırması
+→ İlkin koordinat emal edilir...
+→ Nəticə: Gizlədilib
+
+2. Prime-Jump Şifrələməsi
+→ Sadə ədəd cədvəli tətbiq edilir...
+→ Nəticə: Gizlədilib
+
+3. Fibonaççi Spiralı
+→ Spiral ofset tətbiq edilir...
+→ Nəticə: Gizlədilib
+
+4. Lehmer RNG Sürüşdürməsi
+→ Təsadüfi sürüşdürmə tətbiq edilir...
+→ Nəticə: Gizlədilib
+
+5. Kvant Geo-Sürüşdürmə
+→ Yekun təhlükəsizlik layı tətbiq edildi.
+→ Yem koordinatı: TƏSDİQLƏNDİ
+
+[SİSTEM] Proses tamamlandı. Yem yayıma hazırdır.`;
 
             const newDecoy: Decoy = {
                 id: uuidv4(),
