@@ -20,6 +20,7 @@ import type { MilitaryUnit, OperationTarget, Decoy } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 import { useToast } from '@/hooks/use-toast';
 import { generateStrategicDecoys, type GenerateStrategicDecoysInput } from '@/ai/flows/generate-strategic-decoys';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 
 
 type ClickCoordinates = {
@@ -254,8 +255,7 @@ export default function MapPlaceholder() {
     }
   };
 
-  const handleEditTargetClick = (e: React.MouseEvent, target: OperationTarget) => {
-    e.stopPropagation();
+  const handleEditTargetClick = (target: OperationTarget) => {
     setEditingTarget(target);
     setTargetName(target.name);
     setAssignedUnitId(target.assignedUnitId);
@@ -264,8 +264,7 @@ export default function MapPlaceholder() {
     setIsTargetDialogOpen(true);
   };
   
-  const handleDeleteTargetClick = async (e: React.MouseEvent, target: OperationTarget) => {
-     e.stopPropagation();
+  const handleDeleteTargetClick = async (target: OperationTarget) => {
      if (!firestore) return;
      const confirmation = confirm(`"${target.name}" adlı hədəfi silmək istədiyinizdən əminsiniz? Bu əməliyyat geri qaytarıla bilməz.`);
      if (confirmation) {
@@ -355,30 +354,34 @@ export default function MapPlaceholder() {
               ))}
               {/* Render Targets */}
               {targets?.map((target) => (
-                 <Tooltip key={target.id}>
-                    <TooltipTrigger asChild>
-                        <div className="absolute" style={{ top: `${target.latitude}%`, left: `${target.longitude}%` }} data-interactive onClick={(e) => e.stopPropagation()}>
-                            <Target className={`w-8 h-8 ${getTargetClasses(target)}`} />
-                        </div>
-                    </TooltipTrigger>
-                    <TooltipContent className="p-0" data-interactive onClick={(e) => e.stopPropagation()}>
-                      <div className='p-2'>
-                        <p>Hədəf: {target.name}</p>
-                        <p className='text-muted-foreground'>Bölük: {units?.find(u => u.id === target.assignedUnitId)?.name ?? 'Naməlum'}</p>
-                         <p className='text-muted-foreground capitalize'>Status: {target.status}</p>
-                      </div>
+                 <div key={target.id} className="absolute" style={{ top: `${target.latitude}%`, left: `${target.longitude}%` }} data-interactive>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button>
+                           <Target className={`w-8 h-8 ${getTargetClasses(target)} cursor-pointer`} />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                          <DropdownMenuItem disabled>
+                            <div>
+                                <p className="font-semibold">Hədəf: {target.name}</p>
+                                <p className='text-muted-foreground text-xs'>Bölük: {units?.find(u => u.id === target.assignedUnitId)?.name ?? 'Naməlum'}</p>
+                                <p className='text-muted-foreground text-xs capitalize'>Status: {target.status}</p>
+                            </div>
+                          </DropdownMenuItem>
                         {isCommander && (
-                          <div className='flex items-center border-t mt-1 p-1'>
-                            <Button variant="ghost" size="sm" className="w-full justify-start gap-1" onClick={(e) => handleEditTargetClick(e, target)}>
-                              <Edit size={14} /> Redaktə et
-                            </Button>
-                            <Button variant="ghost" size="sm" className="w-full justify-start gap-1 text-destructive hover:text-destructive" onClick={(e) => handleDeleteTargetClick(e, target)}>
-                              <Trash2 size={14} /> Sil
-                            </Button>
-                          </div>
+                            <>
+                                <DropdownMenuItem onSelect={() => handleEditTargetClick(target)}>
+                                  <Edit size={14} className="mr-2" /> Redaktə et
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => handleDeleteTargetClick(target)} className="text-destructive focus:text-destructive">
+                                  <Trash2 size={14} className="mr-2" /> Sil
+                                </DropdownMenuItem>
+                            </>
                         )}
-                    </TooltipContent>
-                </Tooltip>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                 </div>
               ))}
                {/* Render Decoys */}
               {decoys?.map((decoy) => (
