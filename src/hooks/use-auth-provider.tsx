@@ -4,8 +4,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { useRouter } from 'next/navigation';
 import { 
   onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
+  signInAnonymously,
   signOut as firebaseSignOut,
   type User as FirebaseUser
 } from 'firebase/auth';
@@ -30,33 +29,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
 
   useEffect(() => {
+    // This effect now only handles anonymous sign-in for public data access
+    // and restoring session from localStorage.
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
-      if (firebaseUser) {
-        // This is the commander
-        const userProfile: UserProfile = {
-          id: firebaseUser.uid,
-          username: 'nicat',
-          role: 'commander',
-        };
-        setUser(userProfile);
-        localStorage.setItem('user', JSON.stringify(userProfile));
-      } else {
-        // Check for sub-commander in localStorage
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) {
-          const parsedUser: UserProfile = JSON.parse(storedUser);
-          if (parsedUser.role === 'sub-commander') {
-            setUser(parsedUser);
-          } else {
-             localStorage.removeItem('user');
-             setUser(null);
-          }
-        } else {
-          setUser(null);
+      if (!firebaseUser) {
+        // If not signed in (even anonymously), sign in anonymously.
+        // This is useful for securing public data, allowing reads only for app users.
+        try {
+          await signInAnonymously(auth);
+        } catch (error) {
+          console.error("Anonymous sign-in failed", error);
         }
       }
-      setLoading(false);
     });
+    
+    // Check for a logged-in user in localStorage
+    try {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+        }
+    } catch (error) {
+        console.error("Failed to parse user from localStorage", error);
+        localStorage.removeItem('user');
+    }
+
+    setLoading(false);
 
     return () => unsubscribe();
   }, []);
@@ -64,60 +62,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (username: string, pass: string) => {
     setLoading(true);
     try {
-      if (username.toLowerCase() === 'nicat') {
-        // Commander Login
-        if (pass === 'Nicat2024') {
-          try {
-            await signInWithEmailAndPassword(auth, 'nicat@geoshield.az', pass);
-            router.push('/komandir');
-          } catch (error: any) {
-            if (error.code === 'auth/user-not-found') {
-              await createUserWithEmailAndPassword(auth, 'nicat@geoshield.az', pass);
-              router.push('/komandir');
-            } else {
-              throw error;
-            }
-          }
-        } else {
-          throw new Error('Baş Komandir üçün yanlış şifrə.');
-        }
-      } else {
-        // Sub-commander Login
-        const q = query(
-          collection(db, "users"),
-          where("username", "==", username),
-          where("password", "==", pass), // Note: Storing plain text passwords is not secure. This is for demo purposes.
-          where("role", "==", "sub-commander")
-        );
-        const querySnapshot = await getDocs(q);
+      const q = query(
+        collection(db, "users"),
+        where("username", "==", username),
+        where("password", "==", pass)
+      );
+      const querySnapshot = await getDocs(q);
 
-        if (querySnapshot.empty) {
-          throw new Error('İstifadəçi adı və ya şifrə yanlışdır.');
-        }
-
-        const userDoc = querySnapshot.docs[0];
-        const userProfile: UserProfile = { id: userDoc.id, ...userDoc.data() } as UserProfile;
-        setUser(userProfile);
-        localStorage.setItem('user', JSON.stringify(userProfile));
-        router.push('/sub-komandir');
+      if (querySnapshot.empty) {
+        throw new Error('İstifadəçi adı və ya şifrə yanlışdır.');
       }
+
+      const userDoc = querySnapshot.docs[0];
+      const userProfile: UserProfile = { id: userDoc.id, ...userDoc.data() } as UserProfile;
+      
+      setUser(userProfile);
+      localStorage.setItem('user', JSON.stringify(userProfile));
+
+      if (userProfile.role === 'commander') {
+        router.push('/komandir');
+      } else if (userProfile.role === 'sub-commander') {
+        router.push('/sub-komandir');
+      } else {
+         throw new Error('Tanınmayan istifadəçi rolu.');
+      }
+
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Giriş Xətası",
         description: error.message,
       });
-      setLoading(false);
+    } finally {
+        setLoading(false);
     }
   };
 
   const logout = async () => {
     setLoading(true);
-    if(user?.role === 'commander') {
-      await firebaseSignOut(auth);
-    }
     localStorage.removeItem('user');
     setUser(null);
+    // We can keep the anonymous session for public data access
+    // If you truly want to sign out completely, you can call await firebaseSignOut(auth);
+    // and then signInAnonymously again. For simplicity, we'll just clear local state.
     setLoading(false);
     router.push('/login');
   };

@@ -114,6 +114,10 @@
           "type": "string",
           "description": "The username of the user."
         },
+        "password": {
+          "type": "string",
+          "description": "The user's password. Stored in plain text."
+        },
         "role": {
           "type": "string",
           "description": "The role of the user (e.g., 'commander', 'sub-commander')."
@@ -130,13 +134,13 @@
       "required": [
         "id",
         "username",
+        "password",
         "role"
       ]
     }
   },
   "auth": {
     "providers": [
-      "password",
       "anonymous"
     ]
   },
