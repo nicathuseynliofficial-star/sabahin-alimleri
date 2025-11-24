@@ -61,38 +61,39 @@ service cloud.firestore {
      * @param userId The user ID to check against the authenticated user.
      */
     function isOwner(userId) {
-      return request.auth.uid == userId;
+      // In this app, auth is based on a custom system, not Firebase Auth UID.
+      // We will rely on document data for ownership-like checks.
+      // For user documents, we can check the incoming write against the userId in path.
+      return true; // Placeholder, real checks are in the rules.
     }
 
     /**
-     * Retrieves the authenticated user's data document from the /users collection.
-     * This is the source of truth for role-based access control.
+     * Retrieves the user data document from the /users collection based on the
+     * custom login system's username. This is a conceptual function.
+     * In practice, we can't query by username in rules. We get the user doc by ID.
+     * The `request.auth.uid` would be the document ID of the logged-in user.
+     * For this custom auth, we will assume client provides the user ID for lookups,
+     * and we must validate it's their own document.
      */
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
     }
 
     /**
-     * Checks if the authenticated user has the 'commander' role.
+     * Checks if the user associated with `userId` has the 'commander' role.
      */
-    function isCommander() {
-      return isSignedIn() && getUserData().role == 'commander';
+    function isCommander(userId) {
+      // For our custom auth, we can't reliably get the current user's role
+      // without their ID. We'll pass the ID from the client.
+      // This is less secure but required by the custom auth design.
+      // A more secure way is to use custom tokens.
+      // Let's assume there is a global admin with a known ID 'admin_nicat'
+      return userId == 'admin_nicat';
     }
-
-    /**
-     * Checks if the authenticated user has the 'canSeeAllUnits' permission flag.
-     */
-    function canSeeAllUnits() {
-      return isSignedIn() && getUserData().canSeeAllUnits == true;
-    }
-
-    /**
-     * Checks if the authenticated user is assigned to a specific military unit.
-     * @param unitId The unit ID to check against the user's assignment.
-     */
-    function isAssignedToUnit(unitId) {
-      return isSignedIn() && getUserData().assignedUnitId == unitId;
-    }
+    
+    // The functions below are designed for a standard Firebase Auth setup.
+    // Given the custom auth, we will adapt the logic inside the match blocks.
+    // The principle remains: check roles and assignments from the /users/{userId} document.
 
     // ------------------------------------------------------------------------
     // Collection Rules
@@ -103,73 +104,67 @@ service cloud.firestore {
      *              and see all units. Sub-commanders can see all units if granted
      *              the `canSeeAllUnits` permission, or otherwise can only see the
      *              specific unit they are assigned to.
-     * @path /military_units/{militaryUnitId}
-     * @allow (get) A sub-commander getting the specific unit they are assigned to.
-     * @deny (list) A sub-commander without the `canSeeAllUnits` flag trying to list all units.
-     * @deny (create) A sub-commander trying to create a new military unit.
-     * @principle Enforces role-based access control (RBAC) using data from the user's profile.
      */
     match /military_units/{militaryUnitId} {
-      allow get: if isSignedIn() && (isCommander() || canSeeAllUnits() || isAssignedToUnit(militaryUnitId));
-      allow list: if isSignedIn() && (isCommander() || canSeeAllUnits());
-      allow create: if isCommander();
-      allow update: if isCommander() && resource != null;
-      allow delete: if isCommander() && resource != null;
+      // Allow read if user is commander, or has canSeeAllUnits flag, or is assigned to this specific unit.
+      allow get: if isSignedIn() && (
+                    getUserData(request.auth.uid).role == 'commander' ||
+                    getUserData(request.auth.uid).canSeeAllUnits == true ||
+                    getUserData(request.auth.uid).assignedUnitId == militaryUnitId
+                  );
+      // Allow list only if user is commander or has canSeeAllUnits flag.
+      allow list: if isSignedIn() && (
+                    getUserData(request.auth.uid).role == 'commander' ||
+                    getUserData(request.auth.uid).canSeeAllUnits == true
+                  );
+      // Only commanders can create, update, or delete units.
+      allow write: if isSignedIn() && getUserData(request.auth.uid).role == 'commander';
     }
 
     /**
      * @description Secures operation target documents. Commanders have full control.
      *              Sub-commanders can only view targets assigned to their own unit.
-     *              Listing all targets is a commander-only privilege to prevent data leakage.
-     * @path /operation_targets/{operationTargetId}
-     * @allow (get) A sub-commander reading a target assigned to their unit.
-     * @deny (list) A sub-commander trying to list all operation targets in the system.
-     * @deny (update) A sub-commander trying to modify a target, even one assigned to their unit.
-     * @principle Uses denormalized `assignedUnitId` for efficient and secure read authorization. Restricts list operations to privileged roles.
      */
     match /operation_targets/{operationTargetId} {
-      allow get: if isSignedIn() && (isCommander() || isAssignedToUnit(resource.data.assignedUnitId));
-      allow list: if isCommander();
-      allow create: if isCommander();
-      allow update: if isCommander() && resource != null;
-      allow delete: if isCommander() && resource != null;
+      // Allow read if user is commander, or is assigned to the unit of this target.
+      allow get: if isSignedIn() && (
+                    getUserData(request.auth.uid).role == 'commander' ||
+                    getUserData(request.auth.uid).assignedUnitId == resource.data.assignedUnitId
+                  );
+      // List is restricted. Client queries must be specific. Commander can list all.
+      // Sub-commanders can only query for targets matching their unitId.
+      allow list: if isSignedIn() && (
+                    getUserData(request.auth.uid).role == 'commander' ||
+                    request.query.where[0][2] == getUserData(request.auth.uid).assignedUnitId
+                  );
+      // Only commanders can create, update, or delete targets.
+      allow write: if isSignedIn() && getUserData(request.auth.uid).role == 'commander';
     }
 
     /**
-     * @description Manages decoy coordinates. This data is intended for public consumption
-     *              and is therefore readable by anyone, including unauthenticated users.
-     *              All client-side write operations are forbidden, assuming decoys are
-     *              managed by a secure backend service.
-     * @path /decoys/{decoyId}
-     * @allow (get, list) An unauthenticated public client reading decoy data.
-     * @deny (create, update, delete) Any authenticated user trying to modify decoy data from the client.
-     * @principle Segregates public read-only data from secure private data to simplify rules and improve security.
+     * @description Manages decoy coordinates. This data is public.
+     *              All client-side write operations are forbidden.
      */
     match /decoys/{decoyId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow get, list: if true;
+      allow write: if false; // Managed by a secure backend (the Genkit flow)
     }
 
     /**
-     * @description Defines rules for user profile documents. Users can create, read, and
-     *              update their own document. Access to other users' documents is denied
-     *              to prevent user enumeration.
-     * @path /users/{userId}
-     * @allow (create) A new user creating their own user document upon signup.
-     * @allow (update) An authenticated user updating their own profile information.
-     * @deny (get) A user trying to read another user's profile.
-     * @deny (list) Any user trying to get a list of all users in the system.
-     * @principle Enforces strict document ownership and prevents user data enumeration. Validates relational integrity on create and update.
+     * @description Defines rules for user profile documents. Users can read and
+     *              update their own document. Commanders can update any user doc (to change permissions).
      */
     match /users/{userId} {
-      allow get: if isOwner(userId);
+      // User can get their own doc. Commander can get any.
+      allow get: if isSignedIn() && (request.auth.uid == userId || getUserData(request.auth.uid).role == 'commander');
+      // No one can list all users.
       allow list: if false;
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isOwner(userId) && resource != null && request.resource.data.id == resource.data.id;
-      allow delete: if isOwner(userId) && resource != null;
+      // Anyone can create a user doc (signup), but the ID must match their auth UID.
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      // User can update their own doc. Commander can update any doc.
+      allow update: if isSignedIn() && (request.auth.uid == userId || getUserData(request.auth.uid).role == 'commander');
+      // User can delete their own account. Commander can delete any.
+      allow delete: if isSignedIn() && (request.auth.uid == userId || getUserData(request.auth.uid).role == 'commander');
     }
   }
 }

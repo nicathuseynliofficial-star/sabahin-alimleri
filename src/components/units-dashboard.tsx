@@ -17,8 +17,8 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, doc } from 'firebase/firestore';
-import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { collection, doc, query, getDocs, where, writeBatch } from 'firebase/firestore';
+import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -56,39 +56,85 @@ export default function UnitsDashboard() {
     setUnitToDelete(unit);
   };
 
-  const confirmDelete = () => {
-    if (unitToDelete && firestore) {
-      const unitDocRef = doc(firestore, 'military_units', unitToDelete.id);
-      deleteDocumentNonBlocking(unitDocRef);
+  const confirmDelete = async () => {
+    if (!unitToDelete || !firestore) return;
 
-      // Also delete the associated commander user
-      if (unitToDelete.commanderId) {
+    const batch = writeBatch(firestore);
+
+    // 1. Delete the military unit document
+    const unitDocRef = doc(firestore, 'military_units', unitToDelete.id);
+    batch.delete(unitDocRef);
+
+    // 2. Delete the associated commander user if they exist
+    if (unitToDelete.commanderId) {
         const userDocRef = doc(firestore, 'users', unitToDelete.commanderId);
-        deleteDocumentNonBlocking(userDocRef);
-      }
-      
-      toast({
-        title: "Bölük Silindi",
-        description: `${unitToDelete.name} və əlaqəli komandir sistemdən silindi.`,
-      });
-      setUnitToDelete(null);
-      setSelectedUnit(null);
+        batch.delete(userDocRef);
+    }
+
+    // 3. Query for and delete all operation targets assigned to this unit
+    const targetsQuery = query(collection(firestore, 'operation_targets'), where('assignedUnitId', '==', unitToDelete.id));
+    
+    try {
+        const targetsSnapshot = await getDocs(targetsQuery);
+        targetsSnapshot.forEach(targetDoc => {
+            batch.delete(targetDoc.ref);
+        });
+
+        // Commit all batched writes
+        await batch.commit();
+
+        toast({
+            title: "Bölük Silindi",
+            description: `${unitToDelete.name}, əlaqəli komandir və bütün təyin edilmiş hədəflər sistemdən silindi.`,
+        });
+
+    } catch (error: any) {
+         toast({
+            variant: "destructive",
+            title: "Xəta",
+            description: "Silmə əməliyyatı zamanı xəta baş verdi: " + error.message,
+        });
+    } finally {
+        setUnitToDelete(null);
+        setSelectedUnit(null); // Deselect the unit from the detail view
     }
   };
+  
+  const handlePermissionChange = (unit: MilitaryUnit | null, canSeeAllUnits: boolean) => {
+      if (!firestore || !unit?.commanderId) return;
+
+      const userDocRef = doc(firestore, 'users', unit.commanderId);
+      updateDocumentNonBlocking(userDocRef, { canSeeAllUnits });
+
+      // No need to manually update state, useCollection will do it
+      toast({
+          title: "İcazə Dəyişdirildi",
+          description: `Komandirin xəritə görmə icazəsi yeniləndi.`
+      });
+  }
+
+  const getCommanderForUnit = (unit: MilitaryUnit | null): UserProfile | undefined => {
+      if (!unit || !users) return undefined;
+      return users.find(u => u.id === unit.commanderId);
+  }
+
+  const commanderForSelectedUnit = useMemo(() => getCommanderForUnit(selectedUnit), [selectedUnit, users]);
 
 
   const getStatusVariant = (status: MilitaryUnit['status']) => {
     switch (status) {
-      case 'operating':
+      case 'operational':
         return 'default';
       case 'alert':
         return 'destructive';
       case 'offline':
+      default:
         return 'secondary';
     }
   };
 
   const getCommanderUsername = (commanderId: string | undefined) => {
+    if (isLoadingUsers) return 'Yüklənir...';
     if (!users || !commanderId) return 'Təyin edilməyib';
     return users.find(u => u.id === commanderId)?.username || 'Naməlum';
   }
@@ -135,7 +181,7 @@ export default function UnitsDashboard() {
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align='end'>
-                                <DropdownMenuItem onClick={() => handleDeleteClick(unit)} className="text-destructive">
+                                <DropdownMenuItem onClick={() => handleDeleteClick(unit)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                                     <Trash2 className='mr-2 h-4 w-4' />
                                     Sil
                                 </DropdownMenuItem>
@@ -168,19 +214,30 @@ export default function UnitsDashboard() {
                 </div>
                 <div className='space-y-2'>
                     <h3 className='font-semibold'>Koordinatlar</h3>
-                    <p className='font-mono'>{selectedUnit.location.lat.toFixed(4)}, {selectedUnit.location.lng.toFixed(4)}</p>
+                    <p className='font-mono'>{selectedUnit.latitude.toFixed(4)}, {selectedUnit.longitude.toFixed(4)}</p>
                 </div>
                 <div className='space-y-2'>
                     <h3 className='font-semibold'>Komandir</h3>
                     <p>{getCommanderUsername(selectedUnit.commanderId)}</p>
                 </div>
-                <div className='space-y-4 rounded-lg border p-4'>
-                    <h3 className='font-semibold'>İcazələr</h3>
-                    <div className="flex items-center justify-between">
-                        <Label htmlFor="can-see-all-units" className='flex-grow'>Bütün xəritəni görə bilər</Label>
-                        <Switch id="can-see-all-units" />
-                    </div>
-                </div>
+                
+                {commanderForSelectedUnit && (
+                  <div className='space-y-4 rounded-lg border p-4'>
+                      <h3 className='font-semibold'>İcazələr</h3>
+                      <div className="flex items-center justify-between">
+                          <Label htmlFor="can-see-all-units" className='flex-grow pr-4'>
+                              Bütün bölükləri və hədəfləri görə bilər
+                              <p className='text-xs text-muted-foreground'>Aktiv olduqda, bu komandir xəritədəki bütün bölükləri və hədəfləri görə biləcək.</p>
+                          </Label>
+                          <Switch 
+                            id="can-see-all-units"
+                            checked={commanderForSelectedUnit.canSeeAllUnits}
+                            onCheckedChange={(checked) => handlePermissionChange(selectedUnit, checked)}
+                            disabled={isLoadingUsers}
+                          />
+                      </div>
+                  </div>
+                )}
             </CardContent>
           </Card>
         ) : (
@@ -196,7 +253,7 @@ export default function UnitsDashboard() {
           <AlertDialogHeader>
             <AlertDialogTitle>Silməni Təsdiqlə</AlertDialogTitle>
             <AlertDialogDescription>
-              "{unitToDelete?.name}" bölüyünü və ona bağlı komandir hesabını silmək istədiyinizdən əminsinizmi? Bu əməliyyat geri qaytarıla bilməz.
+              "{unitToDelete?.name}" bölüyünü, ona bağlı komandir hesabını və bütün təyin edilmiş hədəfləri silmək istədiyinizdən əminsinizmi? Bu əməliyyat geri qaytarıla bilməz.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

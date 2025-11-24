@@ -13,11 +13,9 @@ export interface MilitaryUnit {
   id: string;
   name: string;
   commanderId: string;
-  status: 'operating' | 'offline' | 'alert';
-  location: {
-    lat: number;
-    lng: number;
-  };
+  status: 'operational' | 'offline' | 'alert';
+  latitude: number;
+  longitude: number;
   mapId: string; // To associate unit with a specific map
 }
 
@@ -25,10 +23,8 @@ export interface OperationTarget {
   id: string;
   name: string;
   assignedUnitId: string;
-  location: {
-    lat: number; // This will store the Y percentage
-    lng: number; // This will store the X percentage
-  };
+  latitude: number; // This will store the Y percentage
+  longitude: number; // This will store the X percentage
   status: 'pending' | 'active' | 'completed';
   mapId: string; // To associate target with a specific map
 }
@@ -36,10 +32,8 @@ export interface OperationTarget {
 
 export interface Decoy {
   id: string;
-  location: {
-    lat: number;
-    lng: number;
-  };
+  latitude: number;
+  longitude: number;
   reasoning: string;
   timestamp: Timestamp;
   originalTargetId: string;

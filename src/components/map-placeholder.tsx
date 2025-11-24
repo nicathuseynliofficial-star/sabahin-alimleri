@@ -20,6 +20,7 @@ import { collection, query, where } from 'firebase/firestore';
 import type { MilitaryUnit, OperationTarget } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 import { useToast } from '@/hooks/use-toast';
+import { generateStrategicDecoys, type GenerateStrategicDecoysInput } from '@/ai/flows/generate-strategic-decoys';
 
 
 type MapMode = 'azerbaijan' | 'karabakh' | 'custom';
@@ -47,36 +48,45 @@ export default function MapPlaceholder() {
   const [targetCoordinates, setTargetCoordinates] = useState<ClickCoordinates>(null);
   const [targetName, setTargetName] = useState('');
   const [assignedUnitId, setAssignedUnitId] = useState('');
+  
+  // State for decoy generation
+  const [isEncrypting, setIsEncrypting] = useState(false);
+  const [selectedTargetForDecoy, setSelectedTargetForDecoy] = useState<OperationTarget | null>(null);
 
 
-  // Base query for units, will be filtered by mapId later
+  // Base query for units
   const unitsBaseQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    let q = collection(firestore, 'military_units');
+    const q = collection(firestore, 'military_units');
 
-    // For sub-commanders, add initial filtering logic
+    // For sub-commanders without full visibility, only query for their own unit.
     if (user.role === 'sub-commander' && !user.canSeeAllUnits && user.assignedUnitId) {
         return query(q, where('id', '==', user.assignedUnitId));
     }
+    // For commanders or sub-commanders with full visibility, we start with the full collection.
+    // The filtering by mapId will happen in the derived query.
     return q;
   }, [firestore, user]);
 
   // Derived query for units, filtered by the current mapMode
   const unitsQuery = useMemoFirebase(() => {
       if (!unitsBaseQuery) return null;
+      // This query will only fetch units that match the current mapId
       return query(unitsBaseQuery, where('mapId', '==', mapMode));
   }, [unitsBaseQuery, mapMode]);
 
   const { data: units, isLoading: isLoadingUnits } = useCollection<MilitaryUnit>(unitsQuery);
 
-  // Base query for targets, will be filtered by mapId
+  // Base query for targets
   const targetsBaseQuery = useMemoFirebase(() => {
       if (!firestore || !user) return null;
-      let q = collection(firestore, 'operation_targets');
+      const q = collection(firestore, 'operation_targets');
 
+      // If sub-commander without full visibility, only query targets assigned to their unit.
       if (user.role === 'sub-commander' && !user.canSeeAllUnits && user.assignedUnitId) {
           return query(q, where('assignedUnitId', '==', user.assignedUnitId));
       }
+      // Commanders or sub-commanders with full visibility get all targets for the given map.
       return q;
   }, [firestore, user]);
   
@@ -156,20 +166,19 @@ export default function MapPlaceholder() {
         return;
     }
 
-    const newTarget: OperationTarget = {
-        id: uuidv4(),
+    const newTarget: Omit<OperationTarget, 'id'> = {
         name: targetName,
         assignedUnitId: assignedUnitId,
-        location: {
-            lat: targetCoordinates.y, // Using percentage as lat/lng for placeholder
-            lng: targetCoordinates.x,
-        },
+        latitude: targetCoordinates.y,
+        longitude: targetCoordinates.x,
         status: 'pending',
-        mapId: mapMode, // Associate target with the current map
+        mapId: mapMode,
     };
+    
+    const targetWithId = { ...newTarget, id: uuidv4() };
 
     const targetsCollection = collection(firestore, 'operation_targets');
-    addDocumentNonBlocking(targetsCollection, newTarget);
+    addDocumentNonBlocking(targetsCollection, targetWithId);
 
     toast({
         title: "Hədəf Yaradıldı",
@@ -181,6 +190,53 @@ export default function MapPlaceholder() {
     setTargetName('');
     setAssignedUnitId('');
     setTargetCoordinates(null);
+  };
+  
+    const handleEncryptTarget = async (target: OperationTarget) => {
+    if (!firestore) return;
+    setSelectedTargetForDecoy(target);
+    setIsEncrypting(true);
+
+    try {
+        const decoyInput: GenerateStrategicDecoysInput = {
+            latitude: target.latitude,
+            longitude: target.longitude,
+            terrainType: 'mountainous', // This can be made dynamic later
+            proximityToPopulatedAreas: 'low', // This can be made dynamic later
+            knownEnemyPatrolRoutes: 'None reported', // This can be made dynamic later
+            radiusKm: 10
+        };
+
+        const decoyResult = await generateStrategicDecoys(decoyInput);
+
+        const newDecoy = {
+            latitude: decoyResult.decoyLatitude,
+            longitude: decoyResult.decoyLongitude,
+            reasoning: decoyResult.reasoning,
+            originalTargetId: target.id,
+            timestamp: new Date()
+        };
+
+        const decoysCollection = collection(firestore, 'decoys');
+        // Setting a specific document ID for the public view to listen to
+        const latestDecoyDoc = doc(decoysCollection, 'latest');
+        setDocumentNonBlocking(latestDecoyDoc, newDecoy, { merge: false });
+
+        toast({
+            title: 'Şifrələmə Uğurlu Oldu',
+            description: `Yeni yem koordinatı yaradıldı və ictimai yayıma göndərildi.`,
+        });
+    } catch (error) {
+        console.error('Error generating decoy:', error);
+        toast({
+            variant: 'destructive',
+            title: 'Şifrələmə Xətası',
+            description: 'Yem koordinatı yaradılarkən problem baş verdi.',
+        });
+    } finally {
+        setIsEncrypting(false);
+        setSelectedTargetForDecoy(null);
+    }
   };
 
 
@@ -220,7 +276,7 @@ export default function MapPlaceholder() {
       <Card className="flex-grow w-full border-primary/20">
         <CardContent className="p-2 h-full">
           <TooltipProvider>
-            <div className="relative w-full h-full rounded-md overflow-hidden bg-muted" onClick={handleMapClick}>
+            <div className="relative w-full h-full rounded-md overflow-hidden bg-muted" onClick={isCommander ? handleMapClick : undefined}>
               <Image
                 src={mapImageSrc()}
                 alt={mapImageAlt()}
@@ -232,7 +288,7 @@ export default function MapPlaceholder() {
               {units?.map((unit) => (
                 <Tooltip key={unit.id}>
                   <TooltipTrigger asChild>
-                    <div className="absolute" style={{ top: `${unit.location.lat}%`, left: `${unit.location.lng}%` }}>
+                    <div className="absolute" style={{ top: `${unit.latitude}%`, left: `${unit.longitude}%` }}>
                       <Shield className="w-8 h-8 text-white fill-blue-500/50 stroke-2" />
                     </div>
                   </TooltipTrigger>
@@ -244,19 +300,26 @@ export default function MapPlaceholder() {
               ))}
               {/* Render Targets */}
               {targets?.map((target) => (
-                <Tooltip key={target.id}>
-                  <TooltipTrigger asChild>
-                    <div className="absolute" style={{ top: `${target.location.lat}%`, left: `${target.location.lng}%` }}>
-                      <Target className={`w-8 h-8 animate-pulse ${
-                          isCommander ? 'text-blue-400' : 'text-green-400'
-                        }`} />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                     <p>Hədəf: {target.name}</p>
-                    <p className='text-muted-foreground'>Bölük: {units?.find(u => u.id === target.assignedUnitId)?.name}</p>
-                     {isCommander && <Button size="sm" className="mt-2 w-full bg-accent text-accent-foreground">Hədəfi Şifrələ</Button>}
-                  </TooltipContent>
+                 <Tooltip key={target.id}>
+                    <TooltipTrigger asChild>
+                        <div className="absolute" style={{ top: `${target.latitude}%`, left: `${target.longitude}%` }}>
+                            <Target className={`w-8 h-8 ${isEncrypting && selectedTargetForDecoy?.id === target.id ? 'animate-ping text-yellow-400' : isCommander ? 'text-blue-400 animate-pulse' : 'text-green-400 animate-pulse'}`} />
+                        </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>Hədəf: {target.name}</p>
+                        <p className='text-muted-foreground'>Bölük: {units?.find(u => u.id === target.assignedUnitId)?.name ?? 'Naməlum'}</p>
+                        {isCommander && (
+                        <Button 
+                            size="sm" 
+                            className="mt-2 w-full bg-accent text-accent-foreground"
+                            onClick={() => handleEncryptTarget(target)}
+                            disabled={isEncrypting}
+                        >
+                            {isEncrypting && selectedTargetForDecoy?.id === target.id ? 'Şifrələnir...' : 'Hədəfi Şifrələ'}
+                        </Button>
+                        )}
+                    </TooltipContent>
                 </Tooltip>
               ))}
             </div>
