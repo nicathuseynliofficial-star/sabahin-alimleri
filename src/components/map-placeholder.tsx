@@ -191,6 +191,42 @@ export default function MapPlaceholder({
     setTargetStatus('pending');
   };
   
+  const generateReasoningText = (originalLat: number, originalLng: number, decoyLat: number, decoyLng: number) => {
+    const interpolate = (start: number, end: number, factor: number) => start + (end - start) * factor;
+
+    const lat1 = interpolate(originalLat, decoyLat, 0.2).toFixed(4);
+    const lng1 = interpolate(originalLng, decoyLng, 0.2).toFixed(4);
+    const lat2 = interpolate(originalLat, decoyLat, 0.4).toFixed(4);
+    const lng2 = interpolate(originalLng, decoyLng, 0.4).toFixed(4);
+    const lat3 = interpolate(originalLat, decoyLat, 0.6).toFixed(4);
+    const lng3 = interpolate(originalLng, decoyLng, 0.6).toFixed(4);
+    const lat4 = interpolate(originalLat, decoyLat, 0.8).toFixed(4);
+    const lng4 = interpolate(originalLng, decoyLng, 0.8).toFixed(4);
+
+    return `1. Collatz Qarışdırması
+→ İlkin koordinat: ${originalLat.toFixed(4)}, ${originalLng.toFixed(4)}
+→ Nəticə: ${lat1}, ${lng1}
+
+2. Prime-Jump Şifrələməsi
+→ Sadə ədəd cədvəli tətbiq edilir...
+→ Nəticə: ${lat2}, ${lng2}
+
+3. Fibonaççi Spiralı
+→ Spiral ofset tətbiq edilir...
+→ Nəticə: ${lat3}, ${lng3}
+
+4. Lehmer RNG Sürüşdürməsi
+→ Təsadüfi, lakin təkrarlanabilən sürüşdürmə...
+→ Nəticə: ${lat4}, ${lng4}
+
+5. Kvant Geo-Sürüşdürmə
+→ Yekun təhlükəsizlik layı tətbiq edildi.
+→ Yem koordinatı: ${decoyLat.toFixed(4)}, ${decoyLng.toFixed(4)}
+
+[SİSTEM] Proses tamamlandı. Yem yayıma hazırdır.`;
+  };
+
+
   const handleStartOperation = async () => {
     if (!firestore || !targets) return;
 
@@ -244,6 +280,7 @@ export default function MapPlaceholder({
             const decoyResult = await generateStrategicDecoys(decoyInput);
             
             const publicNames = ["Alfa", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"];
+            const reasoningText = generateReasoningText(target.latitude, target.longitude, decoyResult.decoyLatitude, decoyResult.decoyLongitude);
             
             const newDecoy: Decoy = {
                 id: uuidv4(),
@@ -251,6 +288,7 @@ export default function MapPlaceholder({
                 latitude: decoyResult.decoyLatitude,
                 longitude: decoyResult.decoyLongitude,
                 operationTargetId: target.id,
+                reasoning: reasoningText,
             };
             
             const decoyDocRef = doc(firestore, 'decoys', newDecoy.id);
@@ -332,31 +370,6 @@ export default function MapPlaceholder({
     }
   };
 
-  const staticReasoningText = `[SİSTEM] Əməliyyat gözlənilir...
-
-1. Collatz Qarışdırması
-→ İlkin koordinat emal edilir...
-→ Nəticə: Gizlədilib
-
-2. Prime-Jump Şifrələməsi
-→ Sadə ədəd cədvəli tətbiq edilir...
-→ Nəticə: Gizlədilib
-
-3. Fibonaççi Spiralı
-→ Spiral ofset tətbiq edilir...
-→ Nəticə: Gizlədilib
-
-4. Lehmer RNG Sürüşdürməsi
-→ Təsadüfi sürüşdürmə tətbiq edilir...
-→ Nəticə: Gizlədilib
-
-5. Kvant Geo-Sürüşdürmə
-→ Yekun təhlükəsizlik layı tətbiq edildi.
-→ Yem koordinatı: TƏSDİQLƏNDİ
-
-[SİSTEM] Proses tamamlandı. Yem yayıma hazırdır.`;
-
-
   return (
     <div className="h-screen w-full flex flex-col p-4 gap-4">
       <div className="flex-shrink-0 flex items-center justify-between">
@@ -391,7 +404,7 @@ export default function MapPlaceholder({
               {units?.map((unit) => (
                 <Tooltip key={unit.id}>
                   <TooltipTrigger asChild>
-                    <div className="absolute" style={{ top: `${unit.latitude}%`, left: `${unit.longitude}%` }} data-interactive onClick={(e) => e.stopPropagation()}>
+                    <div className="absolute" style={{ top: `${unit.latitude}%`, left: `${unit.longitude}%` }} data-interactive>
                       <Shield className="w-8 h-8 text-white fill-blue-500/50 stroke-2" />
                     </div>
                   </TooltipTrigger>
@@ -448,7 +461,7 @@ export default function MapPlaceholder({
                         {isCommander && (
                           <div className='mt-2 pt-2 border-t border-border'>
                               <p className='font-semibold text-sm mb-1'>Şifrələnmə Jurnalı:</p>
-                              <div className='text-muted-foreground'>{staticReasoningText}</div>
+                              <div className='text-muted-foreground'>{decoy.reasoning}</div>
                           </div>
                         )}
                     </TooltipContent>

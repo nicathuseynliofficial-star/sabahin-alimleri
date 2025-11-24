@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -11,36 +12,59 @@ interface EncryptionLogPanelProps {
   isEncrypting: boolean;
 }
 
-const steps = [
+const initialSteps = [
     {
         title: "1. Collatz Qarışdırması",
-        details: ["→ İlkin koordinat emal edilir...", "→ Nəticə: Gizlədilib"],
+        details: ["→ İlkin koordinat emal edilir...", "→ Nəticə: Gözlənilir..."],
     },
     {
         title: "2. Prime-Jump Şifrələməsi",
-        details: ["→ Sadə ədəd cədvəli tətbiq edilir...", "→ Nəticə: Gizlədilib"],
+        details: ["→ Sadə ədəd cədvəli tətbiq edilir...", "→ Nəticə: Gözlənilir..."],
     },
     {
         title: "3. Fibonaççi Spiralı",
-        details: ["→ Spiral ofset tətbiq edilir...", "→ Nəticə: Gizlədilib"],
+        details: ["→ Spiral ofset tətbiq edilir...", "→ Nəticə: Gözlənilir..."],
     },
     {
         title: "4. Lehmer RNG Sürüşdürməsi",
-        details: ["→ Təsadüfi sürüşdürmə tətbiq edilir...", "→ Nəticə: Gizlədilib"],
+        details: ["→ Təsadüfi sürüşdürmə tətbiq edilir...", "→ Nəticə: Gözlənilir..."],
     },
     {
         title: "5. Kvant Geo-Sürüşdürmə",
-        details: ["→ Yekun təhlükəsizlik layı tətbiq edildi.", "→ Yem koordinatı: TƏSDİQLƏNDİ"],
+        details: ["→ Yekun təhlükəsizlik layı tətbiq edildi.", "→ Yem koordinatı: TƏSDİQLƏNİR..."],
         isFinal: true,
     },
 ];
 
 export default function EncryptionLogPanel({ activeStep, isEncrypting }: EncryptionLogPanelProps) {
+    const [logSteps, setLogSteps] = useState(initialSteps);
+
+    useEffect(() => {
+        if (isEncrypting) {
+            if (activeStep > 0 && activeStep <= logSteps.length) {
+                const currentStepIndex = activeStep - 1;
+                const randomLat = (40 + Math.random()).toFixed(4);
+                const randomLng = (49 + Math.random()).toFixed(4);
+                let resultText = `→ Nəticə: ${randomLat}, ${randomLng}`;
+
+                if (logSteps[currentStepIndex].isFinal) {
+                    resultText = `→ Yem koordinatı: TƏSDİQLƏNDİ`;
+                }
+
+                const updatedSteps = [...logSteps];
+                updatedSteps[currentStepIndex].details[1] = resultText;
+                setLogSteps(updatedSteps);
+            }
+        } else {
+            // Reset when not encrypting
+            setLogSteps(initialSteps);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeStep, isEncrypting]);
 
     const getStepClass = (stepIndex: number) => {
-        const isActive = isEncrypting && activeStep > stepIndex;
-        if (isActive) {
-            return steps[stepIndex].isFinal ? "text-green-400" : "text-yellow-400";
+        if (isEncrypting && activeStep > stepIndex) {
+            return logSteps[stepIndex].isFinal ? "text-green-400" : "text-yellow-400";
         }
         return "text-muted-foreground";
     };
@@ -62,10 +86,10 @@ export default function EncryptionLogPanel({ activeStep, isEncrypting }: Encrypt
                                 {isEncrypting ? "[SİSTEM] Əməliyyat icra edilir..." : "[SİSTEM] Əməliyyat gözlənilir..."}
                             </p>
 
-                            {steps.map((step, index) => (
+                            {logSteps.map((step, index) => (
                                 <div key={index} className={cn("transition-colors", getStepClass(index))}>
                                     <p className="font-semibold flex items-center gap-2">
-                                     {step.isFinal && <ShieldCheck size={14} />}
+                                     {step.isFinal && activeStep > index && <ShieldCheck size={14} />}
                                      {step.title}
                                     </p>
                                     {step.details.map((detail, detailIndex) => (
@@ -74,7 +98,7 @@ export default function EncryptionLogPanel({ activeStep, isEncrypting }: Encrypt
                                 </div>
                             ))}
 
-                            <p className={cn("transition-colors", activeStep > steps.length ? "text-green-400" : "text-muted-foreground")}>
+                            <p className={cn("transition-colors", activeStep > logSteps.length ? "text-green-400" : "text-muted-foreground")}>
                                 [SİSTEM] Proses tamamlandı. Yem yayıma hazırdır.
                             </p>
                         </div>

@@ -36,4 +36,5 @@ export interface Decoy {
   latitude: number;
   longitude: number;
   operationTargetId: string;
+  reasoning?: string;
 }
