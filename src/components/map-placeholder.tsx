@@ -245,36 +245,12 @@ export default function MapPlaceholder({
             
             const publicNames = ["Alfa", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"];
             
-           const reasoningText = `[SİSTEM] Əməliyyat gözlənilir...
-
-1. Collatz Qarışdırması
-→ İlkin koordinat emal edilir...
-→ Nəticə: Gizlədilib
-
-2. Prime-Jump Şifrələməsi
-→ Sadə ədəd cədvəli tətbiq edilir...
-→ Nəticə: Gizlədilib
-
-3. Fibonaççi Spiralı
-→ Spiral ofset tətbiq edilir...
-→ Nəticə: Gizlədilib
-
-4. Lehmer RNG Sürüşdürməsi
-→ Təsadüfi sürüşdürmə tətbiq edilir...
-→ Nəticə: Gizlədilib
-
-5. Kvant Geo-Sürüşdürmə
-→ Yekun təhlükəsizlik layı tətbiq edildi.
-→ Yem koordinatı: TƏSDİQLƏNDİ
-
-[SİSTEM] Proses tamamlandı. Yem yayıma hazırdır.`;
-
             const newDecoy: Decoy = {
                 id: uuidv4(),
                 publicName: `Bölük ${publicNames[index % publicNames.length]}`,
                 latitude: decoyResult.decoyLatitude,
                 longitude: decoyResult.decoyLongitude,
-                reasoning: reasoningText,
+                operationTargetId: target.id,
             };
             
             const decoyDocRef = doc(firestore, 'decoys', newDecoy.id);
@@ -355,6 +331,30 @@ export default function MapPlaceholder({
         return 'text-blue-400';
     }
   };
+
+  const staticReasoningText = `[SİSTEM] Əməliyyat gözlənilir...
+
+1. Collatz Qarışdırması
+→ İlkin koordinat emal edilir...
+→ Nəticə: Gizlədilib
+
+2. Prime-Jump Şifrələməsi
+→ Sadə ədəd cədvəli tətbiq edilir...
+→ Nəticə: Gizlədilib
+
+3. Fibonaççi Spiralı
+→ Spiral ofset tətbiq edilir...
+→ Nəticə: Gizlədilib
+
+4. Lehmer RNG Sürüşdürməsi
+→ Təsadüfi sürüşdürmə tətbiq edilir...
+→ Nəticə: Gizlədilib
+
+5. Kvant Geo-Sürüşdürmə
+→ Yekun təhlükəsizlik layı tətbiq edildi.
+→ Yem koordinatı: TƏSDİQLƏNDİ
+
+[SİSTEM] Proses tamamlandı. Yem yayıma hazırdır.`;
 
 
   return (
@@ -448,7 +448,7 @@ export default function MapPlaceholder({
                         {isCommander && (
                           <div className='mt-2 pt-2 border-t border-border'>
                               <p className='font-semibold text-sm mb-1'>Şifrələnmə Jurnalı:</p>
-                              <div className='text-muted-foreground'>{decoy.reasoning}</div>
+                              <div className='text-muted-foreground'>{staticReasoningText}</div>
                           </div>
                         )}
                     </TooltipContent>

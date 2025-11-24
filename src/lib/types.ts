@@ -35,5 +35,5 @@ export interface Decoy {
   publicName: string; // e.g. "Bölük Alfa"
   latitude: number;
   longitude: number;
-  reasoning: string;
+  operationTargetId: string;
 }
