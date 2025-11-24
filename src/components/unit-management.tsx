@@ -21,9 +21,10 @@ import { v4 as uuidv4 } from 'uuid'; // We need a UUID library
 interface UnitManagementProps {
     isOpen: boolean;
     onOpenChange: (isOpen: boolean) => void;
+    activeMapId: string;
 }
 
-export default function UnitManagement({ isOpen, onOpenChange }: UnitManagementProps) {
+export default function UnitManagement({ isOpen, onOpenChange, activeMapId }: UnitManagementProps) {
   const { firestore } = useFirebase();
   const [unitName, setUnitName] = useState('');
   const [commanderUsername, setCommanderUsername] = useState('');
@@ -51,38 +52,39 @@ export default function UnitManagement({ isOpen, onOpenChange }: UnitManagementP
     }
 
     setLoading(true);
+    
+    const newUnitId = uuidv4();
+    const newUserId = uuidv4();
 
     try {
       // 1. Create the sub-commander user
       const usersCollection = collection(firestore, 'users');
-      const newUserId = uuidv4();
       const newUser = {
         id: newUserId,
         username: commanderUsername,
         password: commanderPassword, // Note: Storing plain text passwords is insecure
         role: 'sub-commander',
         canSeeAllUnits: false,
+        assignedUnitId: newUnitId,
       };
       // Use non-blocking add to create the user
-      const userDocRefPromise = addDocumentNonBlocking(usersCollection, newUser);
+      addDocumentNonBlocking(usersCollection, newUser);
 
       // 2. Create the military unit and link it to the user
       const unitsCollection = collection(firestore, 'military_units');
       const newUnit = {
+        id: newUnitId,
         name: unitName,
         status: 'offline', // Default status
         commanderId: newUserId,
         location: { // Dummy location, can be updated later
             lat: 40.4093 + (Math.random() - 0.5) * 2,
             lng: 49.8671 + (Math.random() - 0.5) * 2,
-        }
+        },
+        mapId: activeMapId, // Associate with the active map
       };
       // Use non-blocking add to create the unit
       await addDocumentNonBlocking(unitsCollection, newUnit);
-
-      // Wait for user creation promise if needed for some logic, but UI is not blocked
-      const userDocRef = await userDocRefPromise;
-      // The userDocRef contains the reference to the newly created user document
 
       toast({
           title: "Uğurlu Əməliyyat",

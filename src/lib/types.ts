@@ -18,6 +18,7 @@ export interface MilitaryUnit {
     lat: number;
     lng: number;
   };
+  mapId: string; // To associate unit with a specific map
 }
 
 export interface OperationTarget {
@@ -29,6 +30,7 @@ export interface OperationTarget {
     lng: number; // This will store the X percentage
   };
   status: 'pending' | 'active' | 'completed';
+  mapId: string; // To associate target with a specific map
 }
 
 

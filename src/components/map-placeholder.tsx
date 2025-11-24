@@ -49,38 +49,43 @@ export default function MapPlaceholder() {
   const [assignedUnitId, setAssignedUnitId] = useState('');
 
 
-  // Fetch units and targets from Firestore
-  const unitsQuery = useMemoFirebase(() => {
+  // Base query for units, will be filtered by mapId later
+  const unitsBaseQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    if (user.role === 'commander') {
-      return collection(firestore, 'military_units');
+    let q = collection(firestore, 'military_units');
+
+    // For sub-commanders, add initial filtering logic
+    if (user.role === 'sub-commander' && !user.canSeeAllUnits && user.assignedUnitId) {
+        return query(q, where('id', '==', user.assignedUnitId));
     }
-    // Sub-commanders see all if they have the perm, else only their own.
-    if (user.canSeeAllUnits) {
-       return collection(firestore, 'military_units');
-    }
-    if (user.assignedUnitId) {
-        return query(collection(firestore, 'military_units'), where('id', '==', user.assignedUnitId));
-    }
-    return null;
+    return q;
   }, [firestore, user]);
+
+  // Derived query for units, filtered by the current mapMode
+  const unitsQuery = useMemoFirebase(() => {
+      if (!unitsBaseQuery) return null;
+      return query(unitsBaseQuery, where('mapId', '==', mapMode));
+  }, [unitsBaseQuery, mapMode]);
+
   const { data: units, isLoading: isLoadingUnits } = useCollection<MilitaryUnit>(unitsQuery);
 
-  const targetsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-     if (user.role === 'commander') {
-      return collection(firestore, 'operation_targets');
-    }
-     // Sub-commanders see all targets if they can see all units
-    if (user.canSeeAllUnits) {
-       return collection(firestore, 'operation_targets');
-    }
-    // Otherwise, they see targets assigned to their unit
-    if (user.assignedUnitId) {
-        return query(collection(firestore, 'operation_targets'), where('assignedUnitId', '==', user.assignedUnitId));
-    }
-    return null;
+  // Base query for targets, will be filtered by mapId
+  const targetsBaseQuery = useMemoFirebase(() => {
+      if (!firestore || !user) return null;
+      let q = collection(firestore, 'operation_targets');
+
+      if (user.role === 'sub-commander' && !user.canSeeAllUnits && user.assignedUnitId) {
+          return query(q, where('assignedUnitId', '==', user.assignedUnitId));
+      }
+      return q;
   }, [firestore, user]);
+  
+  // Derived query for targets, filtered by current mapMode
+  const targetsQuery = useMemoFirebase(() => {
+      if (!targetsBaseQuery) return null;
+      return query(targetsBaseQuery, where('mapId', '==', mapMode));
+  }, [targetsBaseQuery, mapMode]);
+
   const { data: targets, isLoading: isLoadingTargets } = useCollection<OperationTarget>(targetsQuery);
 
 
@@ -159,7 +164,8 @@ export default function MapPlaceholder() {
             lat: targetCoordinates.y, // Using percentage as lat/lng for placeholder
             lng: targetCoordinates.x,
         },
-        status: 'pending'
+        status: 'pending',
+        mapId: mapMode, // Associate target with the current map
     };
 
     const targetsCollection = collection(firestore, 'operation_targets');

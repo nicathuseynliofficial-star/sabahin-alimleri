@@ -93,6 +93,10 @@ export default function UnitsDashboard() {
     return users.find(u => u.id === commanderId)?.username || 'Naməlum';
   }
 
+  // A default mapId is needed when opening the dialog from here.
+  // We'll default to 'azerbaijan' but a more robust solution might involve passing the active map from a higher-level component.
+  const activeMapId = "azerbaijan";
+
   return (
     <div className="h-screen w-full grid grid-cols-1 lg:grid-cols-3 gap-4 p-4">
       <div className="lg:col-span-1 flex flex-col">
@@ -158,6 +162,10 @@ export default function UnitsDashboard() {
                     <h3 className='font-semibold'>Status</h3>
                     <p><Badge variant={getStatusVariant(selectedUnit.status)}>{selectedUnit.status}</Badge></p>
                 </div>
+                 <div className='space-y-2'>
+                    <h3 className='font-semibold'>Xəritə</h3>
+                    <p className='capitalize'>{selectedUnit.mapId}</p>
+                </div>
                 <div className='space-y-2'>
                     <h3 className='font-semibold'>Koordinatlar</h3>
                     <p className='font-mono'>{selectedUnit.location.lat.toFixed(4)}, {selectedUnit.location.lng.toFixed(4)}</p>
@@ -181,7 +189,7 @@ export default function UnitsDashboard() {
             </div>
         )}
       </div>
-      <UnitManagement isOpen={isNewUnitDialogOpen} onOpenChange={setIsNewUnitDialogOpen} />
+      <UnitManagement isOpen={isNewUnitDialogOpen} onOpenChange={setIsNewUnitDialogOpen} activeMapId={activeMapId} />
 
       <AlertDialog open={!!unitToDelete} onOpenChange={(open) => !open && setUnitToDelete(null)}>
         <AlertDialogContent>

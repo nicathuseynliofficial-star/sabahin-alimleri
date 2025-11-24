@@ -25,6 +25,10 @@
         "longitude": {
           "type": "number",
           "description": "The current longitude coordinate of the unit's location."
+        },
+        "mapId": {
+            "type": "string",
+            "description": "The ID of the map this unit belongs to."
         }
       },
       "required": [
@@ -32,7 +36,8 @@
         "name",
         "status",
         "latitude",
-        "longitude"
+        "longitude",
+        "mapId"
       ]
     },
     "OperationTarget": {
@@ -60,6 +65,10 @@
         "assignedUnitId": {
           "type": "string",
           "description": "Reference to MilitaryUnit. The ID of the military unit assigned to this target. (Relationship: MilitaryUnit 1:N OperationTarget)"
+        },
+        "mapId": {
+            "type": "string",
+            "description": "The ID of the map this target belongs to."
         }
       },
       "required": [
@@ -67,7 +76,8 @@
         "name",
         "latitude",
         "longitude",
-        "assignedUnitId"
+        "assignedUnitId",
+        "mapId"
       ]
     },
     "Decoy": {
